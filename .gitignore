@@ -1,0 +1,12 @@
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+.DS_Store
+
+datasets/
+results/
+*.lock
+AGENTS.md
+
+*test*
