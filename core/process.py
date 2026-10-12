@@ -1,4 +1,5 @@
 import argparse
+import math
 import os
 import traceback
 from collections.abc import Mapping
@@ -85,6 +86,10 @@ def _validate_training_result(task: ClientTask, result: ClientResult) -> None:
     """在 Worker 内尽早验证算法钩子的基础协议。"""
     if result.client_id != task.client_id:
         raise ValueError("ClientHook 返回的 client_id 与任务不一致")
+    if not math.isfinite(result.loss):
+        raise FloatingPointError(
+            f"客户端 {task.client_id} 返回非有限训练损失：{result.loss}"
+        )
     for tensor in result.state.values():
         if tensor.device.type != "cpu" or tensor.requires_grad:
             raise ValueError("ClientHook 必须返回独立的 CPU 模型状态")
