@@ -1,6 +1,7 @@
 import argparse
 import math
 import os
+import queue
 import traceback
 from collections.abc import Mapping
 from datetime import datetime
@@ -63,7 +64,7 @@ def _worker(
         startup_trace(args, "client_init_done", worker_id)
         hook.set_data(train_sets, test_sets)
         startup_trace(args, "set_data_done", worker_id)
-    except Exception:  # noqa: BLE001 -- 必须将 Worker 初始化异常传给主进程。
+    except BaseException:  # noqa: BLE001 -- 初始化失败必须传给主进程。
         outbox.put((worker_id, None, None, traceback.format_exc()))
         return
 
@@ -76,7 +77,7 @@ def _worker(
                 result = hook.evaluate(task)
                 _validate_evaluation_result(task, result)
             outbox.put((worker_id, task.client_id, result, None))
-        except Exception:  # noqa: BLE001 -- 必须将算法钩子异常传给主进程。
+        except BaseException:  # noqa: BLE001 -- 钩子失败必须传给主进程。
             outbox.put((worker_id, task.client_id, None, traceback.format_exc()))
         finally:
             torch.cuda.empty_cache()
@@ -170,49 +171,92 @@ class PersistentClientPool:
 
     def _run(self, tasks, action: str):
         """调度同一协议类型的任务；任一 Worker 错误都会立即失败。"""
+        self._check_workers_alive(action)
         results: dict[int, Any] = {}
         next_task = 0
         active = 0
+        pending_workers: dict[int, int] = {}
         for worker_id in range(min(len(self.inboxes), len(tasks))):
             self.inboxes[worker_id].put(tasks[next_task])
+            pending_workers[worker_id] = tasks[next_task].client_id
             next_task += 1
             active += 1
         while active:
-            worker_id, client_id, result, error = self.outbox.get()
+            worker_id, client_id, result, error = self._get_result(
+                pending_workers, action
+            )
             active -= 1
+            pending_workers.pop(worker_id, None)
             if error is not None:
                 raise RuntimeError(f"worker {worker_id} {action}失败：\n{error}")
             results[client_id] = result
             if next_task < len(tasks):
                 self.inboxes[worker_id].put(tasks[next_task])
+                pending_workers[worker_id] = tasks[next_task].client_id
                 next_task += 1
                 active += 1
         return results
 
     def _run_worker_queues(self, queues, action: str):
         """让每个 Worker 串行消费自己的任务队列。"""
+        self._check_workers_alive(action)
         results: dict[int, Any] = {}
         positions = [0] * len(queues)
         active = 0
+        pending_workers: dict[int, int] = {}
         for worker_id, tasks in enumerate(queues):
             if tasks:
                 self.inboxes[worker_id].put(tasks[0])
+                pending_workers[worker_id] = tasks[0].client_id
                 positions[worker_id] = 1
                 active += 1
         while active:
-            worker_id, client_id, result, error = self.outbox.get()
+            worker_id, client_id, result, error = self._get_result(
+                pending_workers, action
+            )
             active -= 1
+            pending_workers.pop(worker_id, None)
             if error is not None:
                 raise RuntimeError(f"worker {worker_id} {action}失败：\n{error}")
             results[client_id] = result
             if positions[worker_id] < len(queues[worker_id]):
                 self.inboxes[worker_id].put(queues[worker_id][positions[worker_id]])
+                pending_workers[worker_id] = queues[worker_id][
+                    positions[worker_id]
+                ].client_id
                 positions[worker_id] += 1
                 active += 1
         return results
 
+    def _get_result(self, pending_workers: dict[int, int], action: str):
+        """等待 worker 结果，并检测未能回报结果便退出的子进程。"""
+        while True:
+            try:
+                return self.outbox.get(timeout=1)
+            except queue.Empty:
+                self._check_workers_alive(action, pending_workers)
+
+    def _check_workers_alive(
+        self, action: str, pending_workers: dict[int, int] | None = None
+    ) -> None:
+        """检测异常退出的 worker，避免任务队列永久等待其结果。"""
+        dead_workers = [
+            (worker_id, process)
+            for worker_id, process in enumerate(self.processes)
+            if not process.is_alive()
+        ]
+        if not dead_workers:
+            return
+        details = []
+        for worker_id, process in dead_workers:
+            client_id = (pending_workers or {}).get(worker_id)
+            task = f"，客户端 {client_id} 的任务未完成" if client_id is not None else ""
+            details.append(f"worker {worker_id} (exit code {process.exitcode}){task}")
+        raise RuntimeError(f"{action}期间 worker 异常退出：" + "; ".join(details))
+
     def close(self, *, terminate: bool = False) -> None:
         """通知 Worker 退出并关闭全部 IPC 队列。"""
+        forced_termination = terminate
         if terminate:
             for process in self.processes:
                 if process.is_alive():
@@ -221,8 +265,16 @@ class PersistentClientPool:
             for inbox in self.inboxes:
                 inbox.put(None)
         for process in self.processes:
-            process.join()
+            process.join(timeout=5)
+            if process.is_alive():
+                process.terminate()
+                forced_termination = True
+                process.join(timeout=5)
+            if process.is_alive():
+                process.kill()
+                forced_termination = True
+                process.join()
         for queue in [*self.inboxes, self.outbox]:
-            if terminate:
+            if forced_termination:
                 queue.cancel_join_thread()
             queue.close()

@@ -32,9 +32,15 @@ class DisPFLClient(BaseClient):
                 total += loss.item()
                 batches += 1
         inputs, targets = next(iter(self.train_loader(task.client_id)))
-        self.model.zero_grad(set_to_none=True)
-        loss = self.ce_loss(self.model(inputs.to(self.device)), targets.to(self.device))
-        loss.backward()
+        self.model.eval()
+        try:
+            self.model.zero_grad(set_to_none=True)
+            loss = self.ce_loss(
+                self.model(inputs.to(self.device)), targets.to(self.device)
+            )
+            loss.backward()
+        finally:
+            self.model.train()
         round_ratio = torch.tensor(
             task.payload["round"] / task.payload["num_rounds"], device=self.device
         )

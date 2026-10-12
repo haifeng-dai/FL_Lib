@@ -6,10 +6,11 @@ from core.decentralized import adjacency
 
 
 def add_arguments(parser):
-    parser.add_argument("--val-ratio", type=float, default=0.1)
+    parser.add_argument("--val-ratio", type=float, default=0.2)
     parser.add_argument("--lr-alpha", type=float, default=0.01)
-    parser.add_argument("--prune-round", type=int, default=0)
-    parser.add_argument("--prune-num", type=int, default=0)
+    parser.add_argument("--prune-round", type=int, default=10)
+    parser.add_argument("--prune-num", type=int, default=90)
+    parser.set_defaults(num_clients=100, adj_type="complete")
 
 
 class L2CClient(BaseClient):
@@ -51,29 +52,46 @@ class L2CClient(BaseClient):
         payload = task.payload
         alpha = payload["alpha"].to(self.device).detach().requires_grad_(True)
         weights = torch.softmax(alpha, dim=0)
-        state = {
+        state_t = {
             name: value.to(self.device).clone()
             for name, value in payload["state_t"].items()
         }
-        for name in state:
-            deltas = torch.stack(
+        deltas = {
+            name: torch.stack(
                 [delta[name].to(self.device) for delta in payload["deltas"]]
             )
-            state[name] -= (deltas * weights.view(-1, *([1] * (deltas.ndim - 1)))).sum(
-                0
-            )
+            for name in state_t
+        }
+
+        def combine_state(mixing_weights):
+            state = {name: value.clone() for name, value in state_t.items()}
+            for name, value in state.items():
+                parameter_deltas = deltas[name]
+                shape = (-1, *([1] * (parameter_deltas.ndim - 1)))
+                weighted_delta = (parameter_deltas * mixing_weights.view(shape)).sum(0)
+                state[name] = value - weighted_delta
+            return state
+
+        state = combine_state(weights)
         validation = Subset(self.train_sets[task.client_id], payload["val_indices"])
         if len(validation):
-            inputs, targets = next(
-                iter(torch.utils.data.DataLoader(validation, self.batch_size))
-            )
-            output = torch.func.functional_call(
-                self.model, state, (inputs.to(self.device),)
-            )
-            gradient = torch.autograd.grad(
-                self.ce_loss(output, targets.to(self.device)), alpha
-            )[0]
-            alpha = (alpha - payload["lr_alpha"] * gradient).detach()
+            total_gradient = torch.zeros_like(alpha)
+            num_samples = 0
+            for inputs, targets in torch.utils.data.DataLoader(
+                validation, self.batch_size
+            ):
+                batch_state = combine_state(torch.softmax(alpha, dim=0))
+                output = torch.func.functional_call(
+                    self.model, batch_state, (inputs.to(self.device),)
+                )
+                loss = self.ce_loss(output, targets.to(self.device))
+                gradient = torch.autograd.grad(loss, alpha)[0]
+                batch_size = targets.size(0)
+                total_gradient += gradient.detach() * batch_size
+                num_samples += batch_size
+            alpha = (
+                alpha - payload["lr_alpha"] * total_gradient / num_samples
+            ).detach()
         self.model.load_state_dict(state)
         return self.result(
             task,
@@ -148,7 +166,16 @@ class Server(BaseServer):
                 for j, neighbor in enumerate(neighbors)
                 if neighbor != i
             ]
-            for _, neighbor in sorted(candidates)[: self.prune_num]:
+            removed = {neighbor for _, neighbor in sorted(candidates)[: self.prune_num]}
+            if not removed:
+                continue
+            keep_indices = [
+                index
+                for index, neighbor in enumerate(neighbors)
+                if neighbor not in removed
+            ]
+            self.alphas[i] = self.alphas[i][keep_indices]
+            for neighbor in removed:
                 self.graph[i, neighbor] = 0
 
     def apply_results(self, results):

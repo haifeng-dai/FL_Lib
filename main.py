@@ -1,3 +1,5 @@
+"""FL_MP 统一命令入口和通用运行编排。"""
+
 import argparse
 import copy
 import signal
@@ -12,8 +14,8 @@ from algo import load_algorithm
 from core.config import (
     add_shared_arguments,
     parse_trials,
+    prepare_arguments,
     set_seed,
-    validate_arguments,
 )
 from core.run_groups import run_groups
 from core.save import (
@@ -29,21 +31,21 @@ from core.save.cli import run_results
 # commands 只填写算法名与该算法的特定参数；两组都会使用此处指定的全部 GPU。
 GROUP_COMMANDS: dict[str, dict[str, str | list[str]]] = {
     "group_a": {
-        "common_args": "--dataset cifar10 --partition dirichlet --dir 0.1 --devices 0:5,1:5,2:5,3:5 --service-device 0",
+        "common_args": "--dataset cifar10 --partition dirichlet --dir 0.1 --service-device 1 --times 5",
         "commands": [
             "--algo fedavg",
-            "--algo feddyn --alpha-coef 0.01",
-            "--algo moon --mu 0.01 --tau 0.5",
-            "--algo scaffold --global-lr 1.0",
+            "--algo feddyn",
+            "--algo moon",
+            "--algo scaffold",
         ],
     },
     "group_b": {
-        "common_args": "--dataset cifar10 --partition dirichlet --dir 0.1 --devices 0:5,1:5,2:5,3:5 --service-device 3",
+        "common_args": "--dataset cifar10 --partition dirichlet --dir 0.1 --service-device 3 --times 5",
         "commands": [
-            "--algo fedprox --mu 0.01",
+            "--algo fedprox",
             "--algo fedproc",
-            "--algo fedfm --mu 0.1",
-            "--algo fedpln --lambda 80.0",
+            "--algo fedfm",
+            "--algo fedfm --anchor-loss prototype",
         ],
     },
 }
@@ -109,7 +111,7 @@ def run_algorithm(algorithm: ModuleType) -> int:
     expected_name = algorithm.__name__.rsplit(".", maxsplit=1)[-1]
     if args.algo.lower() != expected_name:
         raise ValueError(f"算法模块 {expected_name} 与 --algo={args.algo} 不一致")
-    validate_arguments(args)
+    prepare_arguments(args)
     failed_trials: list[int] = []
     for trial in parse_trials(args):
         trial_args = copy.copy(args)

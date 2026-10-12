@@ -2,6 +2,7 @@ import torch
 
 from core import BaseClient, BaseServer
 from core.decentralized import adjacency, mix_states, sinkhorn
+
 from ..gfl.fedproc import extract_prototypes
 
 
@@ -16,6 +17,9 @@ class PearFLClient(BaseClient):
 
     def train(self, task):
         prototypes = task.payload["prototypes"].to(self.device)
+        prototype_available = task.payload["prototype_available"].to(
+            self.device, dtype=torch.bool
+        )
         optimizer = self.build_optimizer()
         self.model.train()
         total, batches = 0.0, 0
@@ -24,9 +28,10 @@ class PearFLClient(BaseClient):
             features = self.model.extractor(inputs)
             logits = self.model.classifier(features)
             loss = self.ce_loss(logits, targets)
-            if prototypes.abs().sum() > 0:
+            available = prototype_available[targets]
+            if available.any():
                 loss = loss + self.lamda * torch.nn.functional.mse_loss(
-                    features, prototypes[targets]
+                    features[available], prototypes[targets[available]]
                 )
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
@@ -57,10 +62,16 @@ class Server(BaseServer):
         self.local_prototypes = torch.zeros(*shape, args.feature_dim)
         self.local_counts = torch.zeros(*shape)
         self.personalized_prototypes = torch.zeros_like(self.local_prototypes)
+        self.personalized_prototype_available = torch.zeros(*shape, dtype=torch.bool)
 
     def training_payloads(self):
         return {
-            client_id: {"prototypes": self.personalized_prototypes[client_id].clone()}
+            client_id: {
+                "prototypes": self.personalized_prototypes[client_id].clone(),
+                "prototype_available": self.personalized_prototype_available[
+                    client_id
+                ].clone(),
+            }
             for client_id in self.selected
         }
 
@@ -72,9 +83,12 @@ class Server(BaseServer):
             self.local_counts[client_id] = payload["counts"]
         neighborhood = (self.weights > 0).float().cpu()
         weights = neighborhood[:, :, None] * self.local_counts[None, :, :]
-        denominator = weights.sum(dim=1, keepdim=True).clamp_min(1)
+        denominator = weights.sum(dim=1, keepdim=True)
+        self.personalized_prototype_available = denominator.squeeze(1) > 0
         self.personalized_prototypes = torch.einsum(
-            "ijc,jcd->icd", weights / denominator, self.local_prototypes
+            "ijc,jcd->icd",
+            weights / denominator.clamp_min(1),
+            self.local_prototypes,
         )
 
     def mix_client_states(self):
@@ -110,4 +124,5 @@ class Server(BaseServer):
             "local_prototypes": self.local_prototypes,
             "local_counts": self.local_counts,
             "personalized_prototypes": self.personalized_prototypes,
+            "personalized_prototype_available": self.personalized_prototype_available,
         }

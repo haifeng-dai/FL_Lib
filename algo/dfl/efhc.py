@@ -66,14 +66,36 @@ class Server(BaseServer):
         ]
         if not self.triggered_ids:
             return
+
+        # A broadcast activates its incident edges. Both endpoints of an
+        # active edge aggregate, while inactive edges contribute no update.
+        triggered = torch.zeros(self.num_clients, dtype=torch.bool, device=self.device)
+        triggered[self.triggered_ids] = True
+        graph = self.graph.to(self.device, dtype=torch.bool)
+        active_edges = graph & (triggered[:, None] | triggered[None, :])
+        active_edges.fill_diagonal_(False)
+
+        event_weights = self.weights.clone()
+        event_weights.fill_diagonal_(0)
+        event_weights *= active_edges
+        event_weights.diagonal().copy_(1 - event_weights.sum(dim=1))
+
+        # Keep the transmitted model as the trigger reference. The subsequent
+        # consensus update changes the main model, not the broadcast snapshot.
+        broadcast_states = {
+            client_id: clone_state(self.client_states[client_id])
+            for client_id in self.triggered_ids
+        }
         mixed = mix_states(
             [self.client_states[client_id] for client_id in range(self.num_clients)],
-            self.weights,
+            event_weights,
             self.device,
         )
-        for client_id in self.triggered_ids:
+        recipients = torch.where(active_edges.any(dim=1))[0].tolist()
+        for client_id in recipients:
             self.client_states[client_id] = mixed[client_id]
-            self.hat_states[client_id] = clone_state(mixed[client_id])
+        for client_id, state in broadcast_states.items():
+            self.hat_states[client_id] = state
 
     def progress_fields(self):
         return {**super().progress_fields(), "triggered": len(self.triggered_ids)}

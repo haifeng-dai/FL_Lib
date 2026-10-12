@@ -2,7 +2,7 @@ import torch
 
 from core import BaseClient, BaseServer
 
-from ..gfl.fedproc import (
+from .fedproc import (
     aggregate_prototypes,
     extract_prototypes,
 )
@@ -10,7 +10,7 @@ from ..gfl.fedproc import (
 
 def add_arguments(parser):
     """注册 FedFM 私有超参数。"""
-    parser.add_argument("--mu", type=float, default=50.0, help="锚点对齐损失权重")
+    parser.add_argument("--mu", type=float, default=1.0, help="锚点对齐损失权重")
     parser.add_argument(
         "--start-fm-round",
         type=int,
@@ -143,6 +143,7 @@ class Server(BaseServer):
         self.global_anchors = aggregate_prototypes(
             [results[client_id].payload for client_id in self.selected],
             self.global_anchors,
+            by_count=True,
         )
 
     def checkpoint_state(self):

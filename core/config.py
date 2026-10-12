@@ -10,6 +10,8 @@ def add_shared_arguments(
 ) -> None:
     """向算法参数解析器添加所有算法共用的运行参数。"""
     parser.add_argument("-a", "--algo", required=True)
+    module_parts = algorithm.__name__.split(".")
+    family = module_parts[1] if len(module_parts) >= 3 else ""
     parser.add_argument(
         "--dataset", choices=("cifar10", "cifar100", "mnist"), default="cifar10"
     )
@@ -28,11 +30,14 @@ def add_shared_arguments(
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-clients", type=int, default=20)
-    parser.add_argument("--join-ratio", type=float, default=1.0)
+    if family == "dfl":
+        parser.set_defaults(join_ratio=1.0)
+    else:
+        parser.add_argument("--join-ratio", type=float, default=1.0)
     parser.add_argument(
         "--devices",
-        default="0:1",
-        help="每张 GPU 的 worker 数，例如 0:2,1:4，0:4,1:4,2:4,3:4",
+        default="0:5,1:5,2:5,3:5",
+        help="每张 GPU 的 worker 数，例如 0:2,1:4",
     )
     parser.add_argument("--service-device", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
@@ -43,7 +48,9 @@ def add_shared_arguments(
     trials.add_argument("--trials", help="逗号分隔的试次编号，例如 1,3,5")
     parser.add_argument("--test-ratio", type=float, default=0.2)
     parser.add_argument(
-        "--partition", choices=("iid", "dirichlet", "pathological"), default="dirichlet"
+        "--partition",
+        choices=("iid", "dirichlet", "pathological"),
+        default="dirichlet",
     )
     parser.add_argument("--dir", type=float, default=0.1)
     parser.add_argument(
@@ -60,48 +67,36 @@ def add_shared_arguments(
     parser.add_argument(
         "--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO"
     )
-    if algorithm.__name__.startswith("algo.gfl."):
+    if family == "gfl":
         parser.add_argument(
             "--eval-clients",
             action="store_true",
             help="报告全局准确率与客户端准确率的等权平均",
         )
-    if algorithm.__name__.startswith("algo.dfl."):
-        parser.add_argument(
-            "--adj-type",
-            choices=("ring", "complete", "random", "small_world", "scale_free", "star"),
-            default="ring",
-        )
-        parser.add_argument("--edge-p", type=float, default=0.2)
-        parser.add_argument("--k-small-world", type=int, default=4)
-        parser.add_argument("--m-scale-free", type=int, default=2)
+    if family == "dfl":
+        _add_topology_arguments(parser)
 
     add_arguments = getattr(algorithm, "add_arguments", None)
     if add_arguments is not None:
         add_arguments(parser)
 
 
-def validate_arguments(args: argparse.Namespace) -> None:
-    """验证共享参数的基本范围与 CUDA 设备请求。"""
+def _add_topology_arguments(parser: argparse.ArgumentParser) -> None:
+    """注册 DFL 客户端图拓扑参数。"""
+    parser.add_argument(
+        "--adj-type",
+        choices=("ring", "complete", "random", "small_world", "scale_free", "star"),
+        default="ring",
+    )
+    parser.add_argument("--edge-p", type=float, default=0.2)
+    parser.add_argument("--k-small-world", type=int, default=4)
+    parser.add_argument("--m-scale-free", type=int, default=2)
+
+
+def prepare_arguments(args: argparse.Namespace) -> None:
+    """准备运行时所需的派生参数。"""
     if getattr(args, "test_mode", False):
         args.num_rounds = 10
-    if args.num_rounds < 1 or args.num_epochs < 1 or args.batch_size < 1:
-        raise ValueError("num-rounds、num-epochs 和 batch-size 必须为正数")
-    if args.num_clients < 1 or not 0 < args.join_ratio <= 1:
-        raise ValueError("num-clients 必须为正数，join-ratio 必须在 (0, 1] 内")
-    if not 0 < args.test_ratio < 1 or args.dir <= 0:
-        raise ValueError("test-ratio 必须在 (0, 1) 内，dir 必须为正数")
-    if args.check_round < 1:
-        raise ValueError("check-round 必须为正数")
-    if args.classes_per_client is not None and args.classes_per_client < 1:
-        raise ValueError("classes-per-client 必须为正数")
-    if args.times < 1:
-        raise ValueError("times 必须为正数")
-    parse_devices(args.devices)
-    if not torch.cuda.is_available():
-        raise RuntimeError("FL_MP 仅支持 NVIDIA CUDA GPU")
-    if args.service_device >= torch.cuda.device_count():
-        raise ValueError("service-device 不可见")
 
 
 def parse_devices(spec: str) -> list[str]:

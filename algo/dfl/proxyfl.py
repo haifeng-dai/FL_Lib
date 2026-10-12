@@ -6,13 +6,15 @@ from core.protocol import EvaluationTask
 
 
 def add_arguments(parser):
-    parser.add_argument("--mu", type=float, default=1.0)
+    parser.add_argument("--alpha", type=float, default=0.5)
+    parser.add_argument("--beta", type=float, default=0.5)
 
 
 class ProxyFLClient(BaseClient):
     def __init__(self, args, device, num_classes):
         super().__init__(args, device, num_classes)
-        self.mu: float = args.mu
+        self.alpha: float = args.alpha
+        self.beta: float = args.beta
 
     def train(self, task):
         proxy = self.copy_model(task.state)
@@ -26,14 +28,18 @@ class ProxyFLClient(BaseClient):
             for inputs, targets in self.train_loader(task.client_id):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 proxy_logits, local_logits = proxy(inputs), local(inputs)
-                proxy_loss = self.ce_loss(proxy_logits, targets) + self.mu * (
+                proxy_loss = (1 - self.beta) * self.ce_loss(
+                    proxy_logits, targets
+                ) + self.beta * (
                     torch.nn.functional.kl_div(
                         torch.nn.functional.log_softmax(proxy_logits, dim=1),
                         torch.nn.functional.softmax(local_logits.detach(), dim=1),
                         reduction="batchmean",
                     )
                 )
-                local_loss = self.ce_loss(local_logits, targets) + self.mu * (
+                local_loss = (1 - self.alpha) * self.ce_loss(
+                    local_logits, targets
+                ) + self.alpha * (
                     torch.nn.functional.kl_div(
                         torch.nn.functional.log_softmax(local_logits, dim=1),
                         torch.nn.functional.softmax(proxy_logits.detach(), dim=1),

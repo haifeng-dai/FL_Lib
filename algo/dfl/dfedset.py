@@ -2,12 +2,13 @@ import torch
 
 from core import BaseClient, BaseServer
 from core.decentralized import adjacency, metropolis_hastings
+
 from ..gfl.fedproc import extract_prototypes
 
 
 def add_arguments(parser):
-    parser.add_argument("--lambda-sa", type=float, default=0.0)
-    parser.add_argument("--lambda-so", type=float, default=0.0)
+    parser.add_argument("--lambda-sa", type=float, default=20.0)
+    parser.add_argument("--lambda-so", type=float, default=5.0)
     parser.add_argument("--eta", type=float, default=0.1)
     parser.add_argument(
         "--confidence-mode", choices=("count", "log", "none"), default="log"
