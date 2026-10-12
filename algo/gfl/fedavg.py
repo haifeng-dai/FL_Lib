@@ -1,5 +1,3 @@
-"""FedAvg 算法实现。"""
-
 from core import BaseClient, BaseServer
 
 

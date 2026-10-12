@@ -1,5 +1,3 @@
-"""FedDyn 算法实现。"""
-
 import torch
 from torch.nn.utils import parameters_to_vector, vector_to_parameters
 

@@ -1,5 +1,3 @@
-"""运行结果的公共读取、校验、筛选和实验选择逻辑。"""
-
 from __future__ import annotations
 
 import csv

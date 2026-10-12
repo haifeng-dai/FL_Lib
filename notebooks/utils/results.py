@@ -1,5 +1,3 @@
-"""FL_MP 实验结果 notebook 的共享读取、筛选、聚合与绘图工具。"""
-
 from __future__ import annotations
 
 import json
@@ -47,9 +45,9 @@ __all__ = [
     "plot_algorithm_runs",
     "plot_parameter_comparison",
     "plot_run",
-    "require_plot_run",
     "read_log",
     "reject_duplicate_runs",
+    "require_plot_run",
     "runs_table",
     "select_runs",
     "show_run_details",

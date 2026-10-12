@@ -1,5 +1,3 @@
-"""FL_MP 实验结果命令行界面。"""
-
 import argparse
 import shutil
 import sqlite3

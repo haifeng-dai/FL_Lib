@@ -1,5 +1,3 @@
-"""纯本地训练算法实现。"""
-
 from core import BaseClient, BaseServer
 
 

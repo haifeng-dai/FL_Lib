@@ -1,5 +1,3 @@
-"""实验目录、日志、指标、checkpoint 与 SQLite 摘要。"""
-
 import csv
 import hashlib
 import json

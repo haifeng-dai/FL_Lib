@@ -1,5 +1,3 @@
-"""FedPer 算法实现。"""
-
 import torch
 
 from core import BaseClient, BaseServer, clone_state

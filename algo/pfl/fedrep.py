@@ -1,6 +1,5 @@
-"""FedRep 算法实现。"""
-
 from core import BaseClient, BaseServer
+
 from ..pfl.fedper import aggregate_states
 
 
@@ -23,7 +22,7 @@ class FedRepClient(BaseClient):
             parameter.requires_grad_(False)
         for parameter in self.model.classifier.parameters():
             parameter.requires_grad_(True)
-        for _ in range(self.epochs_head):
+        for _ in range(self.num_epochs):
             for inputs, targets in self.train_loader(task.client_id):
                 optimizer.zero_grad(set_to_none=True)
                 loss = self.ce_loss(
@@ -38,7 +37,7 @@ class FedRepClient(BaseClient):
         for parameter in self.model.classifier.parameters():
             parameter.requires_grad_(False)
         loss_sum, batches = 0.0, 0
-        for _ in range(self.num_epochs):
+        for _ in range(self.epochs_head):
             for inputs, targets in self.train_loader(task.client_id):
                 optimizer.zero_grad(set_to_none=True)
                 loss = self.ce_loss(

@@ -1,5 +1,3 @@
-"""FedALA 算法实现。"""
-
 import torch
 from torch.utils.data import Subset
 
@@ -9,9 +7,9 @@ from core.data import make_loader
 
 def add_arguments(parser):
     parser.add_argument("--eta", type=float, default=1.0)
-    parser.add_argument("--rand-percent", type=int, default=80)
-    parser.add_argument("--layer-idx", type=int, default=0)
-    parser.add_argument("--ala-threshold", type=float, default=0.1)
+    parser.add_argument("--rand-percent", type=int, default=20)
+    parser.add_argument("--layer-idx", type=int, default=2)
+    parser.add_argument("--ala-threshold", type=float, default=0.01)
     parser.add_argument("--num-pre-loss", type=int, default=10)
 
 
@@ -29,7 +27,12 @@ class FedALAClient(BaseClient):
         global_model.requires_grad_(False)
         params_global = list(global_model.parameters())
         params_local = list(self.model.parameters())
-        if torch.sum(params_global[0] - params_local[0]) == 0:
+        if all(
+            torch.equal(global_param, local_param)
+            for global_param, local_param in zip(
+                params_global, params_local, strict=True
+            )
+        ):
             return saved_weights
         if self.layer_idx:
             for local, global_ in zip(
@@ -57,7 +60,7 @@ class FedALAClient(BaseClient):
 
         losses = []
         while True:
-            batch_losses = []
+            last_loss = None
             for inputs, targets in loader:
                 temp.zero_grad(set_to_none=True)
                 loss = self.ce_loss(
@@ -69,18 +72,23 @@ class FedALAClient(BaseClient):
                     temp_params, local, global_, weights
                 ):
                     assert temp_param.grad is not None
-                    weight.sub_(
-                        self.eta * temp_param.grad * (global_param - local_param)
-                    )
-                    weight.clamp_(0, 1)
-                    temp_param.data.copy_(
-                        local_param + (global_param - local_param) * weight
-                    )
-                batch_losses.append(loss.item())
-            losses.append(sum(batch_losses) / len(batch_losses))
+                    with torch.no_grad():
+                        weight.sub_(
+                            self.eta * temp_param.grad * (global_param - local_param)
+                        )
+                        weight.clamp_(0, 1)
+                        temp_param.copy_(
+                            local_param + (global_param - local_param) * weight
+                        )
+                last_loss = loss.detach()
+            if last_loss is None:
+                raise ValueError("FedALA 自适应聚合抽样没有产生 batch")
+            losses.append(last_loss.item())
             if saved_weights is not None or (
                 len(losses) > self.num_pre_loss
-                and torch.tensor(losses[-self.num_pre_loss :]).std()
+                and torch.tensor(losses[-self.num_pre_loss :], dtype=torch.float64).std(
+                    unbiased=False
+                )
                 < self.ala_threshold
             ):
                 break

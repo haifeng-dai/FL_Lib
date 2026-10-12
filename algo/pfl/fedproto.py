@@ -1,8 +1,7 @@
-"""FedProto 算法实现。"""
-
 import torch
 
 from core import BaseClient, BaseServer
+
 from ..gfl.fedproc import aggregate_prototypes, extract_prototypes
 
 
@@ -19,6 +18,7 @@ class FedProtoClient(BaseClient):
         prototypes = task.payload.get("global_prototypes")
         if prototypes is not None:
             prototypes = prototypes.to(self.device)
+        prototype_available = task.payload["prototype_available"].to(self.device)
         optimizer = self.build_optimizer()
         self.model.train()
         loss_sum, steps = 0.0, 0
@@ -27,9 +27,10 @@ class FedProtoClient(BaseClient):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 features = self.model.extractor(inputs)
                 loss = self.ce_loss(self.model.classifier(features), targets)
-                if prototypes is not None:
+                valid = prototype_available[targets]
+                if prototypes is not None and valid.any():
                     loss = loss + self.mu * torch.nn.functional.mse_loss(
-                        features, prototypes[targets]
+                        features[valid], prototypes[targets[valid]]
                     )
                 optimizer.zero_grad(set_to_none=True)
                 loss.backward()
@@ -55,12 +56,16 @@ class Server(BaseServer):
     def __init__(self, args):
         super().__init__(args)
         self.global_prototypes = None
+        self.prototype_available = torch.zeros(self.num_classes, dtype=torch.bool)
         self.mu: float = args.mu
         self.feature_dim: int = args.feature_dim
 
     def training_payloads(self):
         return {
-            client_id: {"global_prototypes": self.global_prototypes}
+            client_id: {
+                "global_prototypes": self.global_prototypes,
+                "prototype_available": self.prototype_available,
+            }
             for client_id in self.selected
         }
 
@@ -73,9 +78,14 @@ class Server(BaseServer):
             else torch.zeros(self.num_classes, self.feature_dim),
             by_count=True,
         )
+        received_counts = torch.stack(
+            [results[client_id].payload["counts"] for client_id in self.selected]
+        ).sum(dim=0)
+        self.prototype_available |= received_counts > 0
 
     def checkpoint_state(self):
         return {
             **super().checkpoint_state(),
             "global_prototypes": self.global_prototypes,
+            "prototype_available": self.prototype_available,
         }

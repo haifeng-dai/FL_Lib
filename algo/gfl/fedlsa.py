@@ -1,5 +1,3 @@
-"""FedLSA 算法实现。"""
-
 import torch
 
 from core import BaseClient, BaseServer, clone_state
@@ -9,8 +7,8 @@ def add_arguments(parser):
     """注册 FedLSA 私有超参数。"""
     parser.add_argument("--lambda-com", type=float, default=0.1)
     parser.add_argument("--alpha-sep", type=float, default=0.02)
-    parser.add_argument("--server-epochs", type=int, default=500)
-    parser.add_argument("--server-lr", type=float, default=0.01)
+    parser.add_argument("--num-epoch-g", type=int, default=500)
+    parser.add_argument("--lr-g", type=float, default=0.01)
     parser.add_argument("--tau", type=float, default=0.1)
 
 
@@ -112,8 +110,8 @@ class Server(BaseServer):
             self.uploaded_states = self.replicated_model_states()
         self.lambda_com: float = args.lambda_com
         self.alpha_sep: float = args.alpha_sep
-        self.server_epochs: int = args.server_epochs
-        self.server_lr: float = args.server_lr
+        self.num_epoch_g: int = args.num_epoch_g
+        self.lr_g: float = args.lr_g
         self.tau: float = args.tau
         self.random_vectors = torch.randn(
             self.num_classes, args.feature_dim, device=self.device, requires_grad=True
@@ -141,12 +139,12 @@ class Server(BaseServer):
         self.model.to(self.device).eval()
         self.anchor_mapping.train()
         optimizer = torch.optim.SGD(
-            [self.random_vectors, *self.anchor_mapping.parameters()], lr=self.server_lr
+            [self.random_vectors, *self.anchor_mapping.parameters()], lr=self.lr_g
         )
         for parameter in self.model.parameters():
             parameter.requires_grad_(False)
         try:
-            for _ in range(self.server_epochs):
+            for _ in range(self.num_epoch_g):
                 anchors = self.anchors()
                 classification = torch.nn.functional.cross_entropy(
                     self.model.classifier(anchors), self.labels

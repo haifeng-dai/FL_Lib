@@ -1,5 +1,3 @@
-"""ProxyFL：私有模型与邻居代理模型的相互蒸馏。"""
-
 import torch
 
 from core import BaseClient, BaseServer, clone_state

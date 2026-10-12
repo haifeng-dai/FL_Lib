@@ -1,5 +1,3 @@
-"""客户端任务、结果和训练钩子的公共协议。"""
-
 import abc
 import argparse
 from dataclasses import dataclass

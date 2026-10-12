@@ -1,18 +1,17 @@
-"""FedTGP 算法实现。"""
-
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from core import BaseClient, BaseServer
+
 from ..gfl.fedpln import dist_contrastive_loss
 from ..gfl.fedproc import aggregate_prototypes, extract_prototypes
 
 
 def add_arguments(parser):
-    parser.add_argument("--lambda", dest="lambda_", type=float, default=1.0)
-    parser.add_argument("--server-epochs", type=int, default=10)
-    parser.add_argument("--server-lr", type=float, default=0.01)
-    parser.add_argument("--margin-threshold", type=float, default=10.0)
+    parser.add_argument("--lambda", dest="lambda_", type=float, default=0.1)
+    parser.add_argument("--num-epoch-g", type=int, default=100)
+    parser.add_argument("--lr-g", type=float, default=0.01)
+    parser.add_argument("--margin-threshold", type=float, default=100.0)
 
 
 class TGP(torch.nn.Module):
@@ -79,8 +78,8 @@ class Server(BaseServer):
         super().__init__(args)
         self.tgp = TGP(self.num_classes, args.feature_dim).to(self.device)
         self.prototypes = None
-        self.server_epochs: int = args.server_epochs
-        self.server_lr: float = args.server_lr
+        self.num_epoch_g: int = args.num_epoch_g
+        self.lr_g: float = args.lr_g
         self.margin_threshold: float = args.margin_threshold
         self.feature_dim: int = args.feature_dim
         self.gap = torch.full((self.num_classes,), float("inf"), device=self.device)
@@ -99,7 +98,7 @@ class Server(BaseServer):
             if self.prototypes is not None
             else torch.zeros(self.num_classes, self.feature_dim)
         )
-        targets = aggregate_prototypes(payloads, old, by_count=True)
+        targets = aggregate_prototypes(payloads, old)
         distances = torch.cdist(targets.to(self.device), targets.to(self.device))
         distances.fill_diagonal_(float("inf"))
         self.gap = distances.min(dim=1).values
@@ -112,13 +111,13 @@ class Server(BaseServer):
             if row.norm() > 1e-8
         ]
         if uploaded:
-            optimizer = torch.optim.SGD(self.tgp.parameters(), lr=self.server_lr)
+            optimizer = torch.optim.SGD(self.tgp.parameters(), lr=self.lr_g)
             values = torch.stack([row for row, _ in uploaded])
             labels = torch.tensor(
                 [label for _, label in uploaded], device=self.device, dtype=torch.long
             )
             dataset = TensorDataset(values, labels)
-            for _ in range(self.server_epochs):
+            for _ in range(self.num_epoch_g):
                 loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
                 for values, labels in loader:
                     values = values.to(self.device)

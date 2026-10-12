@@ -1,5 +1,3 @@
-"""DisPFL：带动态稀疏掩码的去中心化个性化联邦学习。"""
-
 import torch
 
 from core import BaseClient, BaseServer, clone_state

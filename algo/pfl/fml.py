@@ -1,13 +1,11 @@
-"""FML 算法实现。"""
-
 import torch
 
 from core import BaseClient, BaseServer, clone_state
 
 
 def add_arguments(parser):
-    parser.add_argument("--alpha-fml", type=float, default=1.0)
-    parser.add_argument("--beta-fml", type=float, default=1.0)
+    parser.add_argument("--alpha-fml", type=float, default=0.5)
+    parser.add_argument("--beta-fml", type=float, default=0.5)
 
 
 class FMLClient(BaseClient):
@@ -33,16 +31,16 @@ class FMLClient(BaseClient):
             for inputs, targets in self.train_loader(task.client_id):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 out_g, out_l = global_model(inputs), self.model(inputs)
-                loss_g = self.ce_loss(
-                    out_g, targets
-                ) + self.beta * torch.nn.functional.kl_div(
+                loss_g = self.beta * self.ce_loss(out_g, targets) + (
+                    1.0 - self.beta
+                ) * torch.nn.functional.kl_div(
                     torch.nn.functional.log_softmax(out_g, dim=1),
                     torch.nn.functional.softmax(out_l.detach(), dim=1),
                     reduction="batchmean",
                 )
-                loss_l = self.ce_loss(
-                    out_l, targets
-                ) + self.alpha * torch.nn.functional.kl_div(
+                loss_l = self.alpha * self.ce_loss(out_l, targets) + (
+                    1.0 - self.alpha
+                ) * torch.nn.functional.kl_div(
                     torch.nn.functional.log_softmax(out_l, dim=1),
                     torch.nn.functional.softmax(out_g.detach(), dim=1),
                     reduction="batchmean",
@@ -76,7 +74,6 @@ class Server(BaseServer):
 
     def apply_results(self, results):
         self.update_client_states(results)
-        total = sum(results[c].num_samples for c in self.selected)
         aggregate = clone_state(self.model.state_dict())
         for name, value in aggregate.items():
             if torch.is_floating_point(value):
@@ -84,6 +81,6 @@ class Server(BaseServer):
                 for client_id in self.selected:
                     value.add_(
                         results[client_id].payload["global_state"][name],
-                        alpha=results[client_id].num_samples / total,
+                        alpha=1.0 / len(self.selected),
                     )
         self.model.load_state_dict(aggregate)

@@ -1,5 +1,3 @@
-"""FL_MP 统一命令入口和通用运行编排。"""
-
 import argparse
 import copy
 import signal

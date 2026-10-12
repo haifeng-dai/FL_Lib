@@ -1,5 +1,3 @@
-"""算法共享命令行参数与 CUDA 资源解析。"""
-
 import argparse
 import random
 from types import ModuleType
@@ -33,8 +31,8 @@ def add_shared_arguments(
     parser.add_argument("--join-ratio", type=float, default=1.0)
     parser.add_argument(
         "--devices",
-        default="0:4,1:4,2:4,3:4",
-        help="每张 GPU 的 worker 数，例如 0:2,1:4",
+        default="0:1",
+        help="每张 GPU 的 worker 数，例如 0:2,1:4，0:4,1:4,2:4,3:4",
     )
     parser.add_argument("--service-device", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)

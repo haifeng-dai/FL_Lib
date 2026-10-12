@@ -1,5 +1,3 @@
-"""L2C：通过验证损失学习邻居协作权重的两阶段算法。"""
-
 import torch
 from torch.utils.data import Subset
 

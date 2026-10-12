@@ -1,16 +1,15 @@
-"""FedSA 算法实现。"""
-
 import torch
 
 from core import BaseClient, BaseServer
+
 from ..gfl.fedpln import dist_contrastive_loss
 from ..gfl.fedproc import aggregate_prototypes, extract_prototypes
 
 
 def add_arguments(parser):
-    parser.add_argument("--alpha-sa", type=float, default=0.9)
-    parser.add_argument("--lambda-r", type=float, default=1.0)
-    parser.add_argument("--lambda-mcl", type=float, default=1.0)
+    parser.add_argument("--alpha-sa", type=float, default=0.9999)
+    parser.add_argument("--lambda-r", type=float, default=0.1)
+    parser.add_argument("--lambda-mcl", type=float, default=0.01)
     parser.add_argument("--lambda-cc", type=float, default=1.0)
 
 
@@ -91,7 +90,7 @@ class Server(BaseServer):
         payloads = [results[i].payload for i in self.selected]
         for i in self.selected:
             self.client_anchors[i] = results[i].payload["prototypes"].clone()
-        merged = aggregate_prototypes(payloads, self.anchors, by_count=True)
+        merged = aggregate_prototypes(payloads, self.anchors)
         mask = merged.norm(dim=1) > 1e-8
         self.anchors[mask] = (
             self.alpha * self.anchors[mask] + (1 - self.alpha) * merged[mask]

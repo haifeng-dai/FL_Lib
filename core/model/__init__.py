@@ -1,5 +1,3 @@
-"""模型构建与注册。"""
-
 from pathlib import Path
 
 import torch

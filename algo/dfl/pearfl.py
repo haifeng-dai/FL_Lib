@@ -1,5 +1,3 @@
-"""PearFL：基于邻居原型交换的去中心化个性化学习。"""
-
 import torch
 
 from core import BaseClient, BaseServer

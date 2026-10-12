@@ -1,5 +1,3 @@
-"""去中心化算法的拓扑和客户端状态混合工具。"""
-
 import torch
 
 from .state import clone_state

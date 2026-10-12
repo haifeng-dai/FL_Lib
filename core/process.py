@@ -1,5 +1,3 @@
-"""算法无关的持久原生多进程客户端池。"""
-
 import argparse
 import os
 import traceback

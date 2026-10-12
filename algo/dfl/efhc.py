@@ -1,5 +1,3 @@
-"""EF-HC：带事件触发通信的去中心化联邦学习。"""
-
 import torch
 
 from core import BaseClient, BaseServer, clone_state

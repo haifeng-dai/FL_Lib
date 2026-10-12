@@ -1,5 +1,3 @@
-"""DFedPGP：Push-Sum 去偏的解耦去中心化训练。"""
-
 import torch
 
 from core import BaseClient, BaseServer, clone_state

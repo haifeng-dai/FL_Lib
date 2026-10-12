@@ -1,5 +1,3 @@
-"""数据集下载/加载与纯索引划分的组装入口。"""
-
 from pathlib import Path
 
 import torch

@@ -1,5 +1,3 @@
-"""仅基于标签与索引的联邦数据划分。"""
-
 from dataclasses import dataclass
 
 import torch

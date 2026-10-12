@@ -1,5 +1,3 @@
-"""FedProc 算法实现。"""
-
 import torch
 
 from core import BaseClient, BaseServer
@@ -31,7 +29,7 @@ def extract_prototypes(model, loader, num_classes, feature_dim, device):
     return prototypes.cpu(), counts.cpu()
 
 
-def aggregate_prototypes(payloads, old, by_count):
+def aggregate_prototypes(payloads: list, old: torch.Tensor, by_count=False):
     """聚合非空类别原型；可选择按类别样本数加权。"""
     sums = torch.zeros_like(old)
     counts = torch.zeros(old.shape[0], dtype=old.dtype)
@@ -100,7 +98,10 @@ class Server(BaseServer):
         self.alpha = 1.0
 
     def training_payloads(self):
-        self.alpha = 1.0 - len(self.accuracies) / self.num_rounds
+        completed_rounds = len(self.accuracies)
+        self.alpha = (
+            0.0 if completed_rounds == 0 else 1.0 - completed_rounds / self.num_rounds
+        )
         return {
             client_id: {
                 "global_prototypes": self.global_prototypes.clone(),
@@ -115,7 +116,7 @@ class Server(BaseServer):
         self.global_prototypes = aggregate_prototypes(
             [results[client_id].payload for client_id in self.selected],
             self.global_prototypes,
-            by_count=False,
+            by_count=True,
         )
 
     def checkpoint_state(self):
@@ -123,6 +124,3 @@ class Server(BaseServer):
             **super().checkpoint_state(),
             "global_prototypes": self.global_prototypes.clone(),
         }
-
-    def progress_fields(self):
-        return {**super().progress_fields(), "alpha": f"{self.alpha:.3f}"}

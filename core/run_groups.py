@@ -1,5 +1,3 @@
-"""并行运行多组实验，并保证每组内的算法按顺序执行。"""
-
 import argparse
 import asyncio
 import json

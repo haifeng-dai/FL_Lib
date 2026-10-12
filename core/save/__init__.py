@@ -1,5 +1,3 @@
-"""实验产物管理与结果查询。"""
-
 from .artifacts import (
     append_metrics,
     configure_logging,

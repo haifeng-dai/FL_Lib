@@ -1,5 +1,3 @@
-"""DFedAvgM 算法实现。"""
-
 from core import BaseClient, BaseServer
 from core.decentralized import adjacency, metropolis_hastings, mix_states
 

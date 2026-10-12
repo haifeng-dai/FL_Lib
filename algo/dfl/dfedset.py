@@ -1,5 +1,3 @@
-"""DFedSET：事件触发的模型与类别原型去中心化一致性训练。"""
-
 import torch
 
 from core import BaseClient, BaseServer

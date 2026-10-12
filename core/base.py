@@ -1,5 +1,3 @@
-"""联邦算法共用的服务端与客户端基础类。"""
-
 import abc
 import argparse
 import random
@@ -250,6 +248,7 @@ class BaseServer(abc.ABC):
             self.test_sets if self.pfl or self.eval_clients else None,
         )
         self.random = random.Random(self.seed)
+        self.client_task_batch = 0
         self.selected: list[int] = []
         self.accuracies: list[float] = []
         self.num_clients = args.num_clients
@@ -278,6 +277,8 @@ class BaseServer(abc.ABC):
                     "accuracy": accuracy,
                     "elapsed_seconds": elapsed,
                 }
+                extra_metrics = self.additional_metrics()
+                metrics.update(extra_metrics)
                 if self.eval_clients:
                     if self.pfl:
                         metrics["global_acc"] = self.client_eval_metrics["global_acc"]
@@ -293,6 +294,8 @@ class BaseServer(abc.ABC):
                     accuracy,
                     elapsed,
                 )
+                for name, value in extra_metrics.items():
+                    logger.info("%s=%.4f", name, value)
                 if self.eval_clients:
                     name = "global_acc" if self.pfl else "client_macro_acc"
                     logger.info(
@@ -363,11 +366,12 @@ class BaseServer(abc.ABC):
         ]
 
     def client_seed(self, client_id: int) -> int:
-        """返回本次客户端训练任务的随机种子。算法可覆写以区分任务随机流。"""
-        return self.seed
+        """按任务批次和客户端编号派生可复现的独立随机种子。"""
+        return self.seed + self.client_task_batch * self.num_clients + client_id
 
     def run_clients(self, *, cache_uploads: bool = True) -> dict[int, ClientResult]:
         """执行客户端任务；纯提取等辅助阶段可跳过上传模型缓存。"""
+        self.client_task_batch += 1
         results = self.pool.run(self.build_tasks())
         if cache_uploads:
             self.update_uploaded_states(results)
@@ -511,6 +515,10 @@ class BaseServer(abc.ABC):
         return {
             name: f"{value:.2f}%" for name, value in self.client_eval_metrics.items()
         }
+
+    def additional_metrics(self) -> dict[str, float]:
+        """返回算法需要额外逐轮记录的指标。"""
+        return {}
 
     @abc.abstractmethod
     def apply_results(self, results: dict[int, ClientResult]) -> None:

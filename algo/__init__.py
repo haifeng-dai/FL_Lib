@@ -1,5 +1,3 @@
-"""联邦学习算法入口与实现。"""
-
 import argparse
 import importlib
 from pathlib import Path

@@ -1,5 +1,3 @@
-"""FL_MP 的基础卷积分类模型。"""
-
 import torch
 
 
