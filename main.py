@@ -62,6 +62,7 @@ def run_once(algorithm: ModuleType, args: argparse.Namespace) -> None:
     paths = create_run(
         args,
         client_metric="global_acc" if algorithm.Server.pfl else "client_macro_acc",
+        extra_metric_columns=getattr(algorithm.Server, "extra_metric_columns", ()),
     )
     record_running(paths, args, started)
     logger = configure_logging(paths, args.log_level)

@@ -358,7 +358,8 @@ def read_metrics_csv(
                 raise ValueError(f"指标文件没有表头：{path}")
             if len(columns) != len(set(columns)):
                 raise ValueError(f"指标文件存在重复列名：{path}")
-            missing = set(required_columns) - set(columns)
+            required_column_set = set(required_columns)
+            missing = required_column_set - set(columns)
             if missing:
                 raise ValueError(
                     f"指标文件 {path} 缺少必需列：{', '.join(sorted(missing))}"
@@ -374,10 +375,13 @@ def read_metrics_csv(
     seen_rounds: set[int] = set()
     for line_number, row in enumerate(rows, start=2):
         for name in columns:
-            if not is_number(row.get(name)):
+            value = row.get(name)
+            if value is None and name not in required_column_set:
+                continue
+            if not is_number(value):
                 raise ValueError(
                     f"指标文件 {path} 第 {line_number} 行的 {name} 不是有限数值："
-                    f"{row.get(name)!r}"
+                    f"{value!r}"
                 )
         round_index = row.get("round")
         if not isinstance(round_index, int) or round_index < 1:

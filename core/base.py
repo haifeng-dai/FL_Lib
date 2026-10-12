@@ -295,7 +295,10 @@ class BaseServer(abc.ABC):
                     elapsed,
                 )
                 for name, value in extra_metrics.items():
-                    logger.info("%s=%.4f", name, value)
+                    if value is None:
+                        logger.info("%s=unavailable", name)
+                    else:
+                        logger.info("%s=%.4f", name, value)
                 if self.eval_clients:
                     name = "global_acc" if self.pfl else "client_macro_acc"
                     logger.info(
@@ -516,7 +519,7 @@ class BaseServer(abc.ABC):
             name: f"{value:.2f}%" for name, value in self.client_eval_metrics.items()
         }
 
-    def additional_metrics(self) -> dict[str, float]:
+    def additional_metrics(self) -> dict[str, float | None]:
         """返回算法需要额外逐轮记录的指标。"""
         return {}
 

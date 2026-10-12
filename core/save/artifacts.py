@@ -2,33 +2,18 @@ import csv
 import hashlib
 import json
 import logging
+import math
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, NotRequired, TypedDict
+from typing import Any, Literal
 
-MetricColumn = Literal[
-    "round",
-    "train_loss",
-    "accuracy",
-    "elapsed_seconds",
-    "global_acc",
-    "client_macro_acc",
-]
+MetricColumn = str
+MetricValue = int | float | None
+MetricsRow = dict[str, MetricValue]
 
 BASE_METRIC_COLUMNS = ("round", "train_loss", "accuracy", "elapsed_seconds")
-
-
-class MetricsRow(TypedDict):
-    """基础指标及可选的客户端模型评估指标。"""
-
-    round: int
-    train_loss: float
-    accuracy: float
-    elapsed_seconds: float
-    global_acc: NotRequired[float]
-    client_macro_acc: NotRequired[float]
 
 
 @dataclass(frozen=True)
@@ -41,12 +26,15 @@ class RunPaths:
     checkpoint_dir: Path
     database: Path
     run_id: str
+    metric_columns: tuple[str, ...]
+    required_metric_columns: tuple[str, ...]
 
 
 def create_run(
     args,
     *,
     client_metric: Literal["global_acc", "client_macro_acc"] = "client_macro_acc",
+    extra_metric_columns: tuple[MetricColumn, ...] = (),
 ) -> RunPaths:
     """创建运行目录、写入参数并初始化日志和指标文件。"""
     arguments = vars(args).copy()
@@ -57,6 +45,13 @@ def create_run(
     directory = (
         Path(args.result_root) / f"{now:%Y}" / f"{now:%m}" / f"{now:%d}" / run_id
     )
+    required_columns = BASE_METRIC_COLUMNS
+    if getattr(args, "eval_clients", False):
+        required_columns += (client_metric,)
+    columns = required_columns + extra_metric_columns
+    if len(columns) != len(set(columns)):
+        raise ValueError("metrics.csv 指标列名重复")
+
     checkpoints = directory / "checkpoints"
     checkpoints.mkdir(parents=True, exist_ok=False)
     (directory / "args.json").write_text(
@@ -70,12 +65,11 @@ def create_run(
         checkpoint_dir=checkpoints,
         database=Path(args.result_root) / "results.sqlite",
         run_id=run_id,
+        metric_columns=columns,
+        required_metric_columns=required_columns,
     )
     with paths.metrics_file.open("w", newline="", encoding="utf-8") as file:
-        columns: tuple[str, ...] = BASE_METRIC_COLUMNS
-        if getattr(args, "eval_clients", False):
-            columns += (client_metric,)
-        csv.DictWriter(file, fieldnames=columns).writeheader()
+        csv.DictWriter(file, fieldnames=paths.metric_columns).writeheader()
     return paths
 
 
@@ -91,22 +85,30 @@ def configure_logging(paths: RunPaths, level: str) -> logging.Logger:
 
 
 def append_metrics(paths: RunPaths, metrics: MetricsRow) -> None:
-    """追加基础指标；启用客户端评估时追加全局与客户端准确率。"""
-    row: dict[MetricColumn, Any] = {
-        "round": metrics["round"],
-        "train_loss": metrics["train_loss"],
-        "accuracy": metrics["accuracy"],
-        "elapsed_seconds": metrics["elapsed_seconds"],
-    }
-    columns: tuple[str, ...] = BASE_METRIC_COLUMNS
-    if "global_acc" in metrics:
-        row["global_acc"] = metrics["global_acc"]
-        columns += ("global_acc",)
-    elif "client_macro_acc" in metrics:
-        row["client_macro_acc"] = metrics["client_macro_acc"]
-        columns += ("client_macro_acc",)
+    """按运行创建时声明的指标 schema 追加一行。"""
+    unknown = set(metrics) - set(paths.metric_columns)
+    if unknown:
+        raise ValueError("未声明的指标列：" + ", ".join(sorted(unknown)))
+    missing = set(paths.required_metric_columns) - set(metrics)
+    if missing:
+        raise ValueError("缺少必需的指标：" + ", ".join(sorted(missing)))
+
+    row: dict[str, Any] = {}
+    for name in paths.metric_columns:
+        value = metrics.get(name)
+        if value is None:
+            if name in paths.required_metric_columns:
+                raise ValueError(f"必需指标 {name!r} 不能留空")
+            row[name] = ""
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TypeError(f"指标 {name!r} 必须是数值或 None")
+        if not math.isfinite(value):
+            raise ValueError(f"指标 {name!r} 必须是有限数值")
+        row[name] = value
+
     with paths.metrics_file.open("a", newline="", encoding="utf-8") as file:
-        csv.DictWriter(file, fieldnames=columns).writerow(row)
+        csv.DictWriter(file, fieldnames=paths.metric_columns).writerow(row)
 
 
 def ensure_runs_table(connection: sqlite3.Connection) -> None:
