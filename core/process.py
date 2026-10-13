@@ -274,7 +274,7 @@ class PersistentClientPool:
                 process.kill()
                 forced_termination = True
                 process.join()
-        for queue in [*self.inboxes, self.outbox]:
+        for ipc_queue in [*self.inboxes, self.outbox]:
             if forced_termination:
-                queue.cancel_join_thread()
-            queue.close()
+                ipc_queue.cancel_join_thread()
+            ipc_queue.close()

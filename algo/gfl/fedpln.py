@@ -1,6 +1,6 @@
 import torch
 
-from core import BaseClient, BaseServer, clone_state
+from core import BaseClient, BaseServer, aggregate_states, clone_state
 from core.data import make_loader
 
 
@@ -52,19 +52,6 @@ def dist_contrastive_loss(features, prototypes, targets, margin=0.0):
     return torch.nn.functional.cross_entropy(-distances, targets)
 
 
-def aggregate_pln_states(states, weights):
-    """按客户端权重聚合 PLN 的 CPU 状态。"""
-    aggregate = clone_state(states[0])
-    for name, tensor in aggregate.items():
-        if torch.is_floating_point(tensor):
-            tensor.zero_()
-            for state, weight in zip(states, weights):
-                tensor.add_(state[name], alpha=weight)
-        else:
-            tensor.copy_(states[0][name])
-    return aggregate
-
-
 class FedPLNClient(BaseClient):
     """依次训练全局模型与类别原型网络的客户端。"""
 
@@ -114,7 +101,6 @@ class FedPLNClient(BaseClient):
             momentum=self.momentum,
             weight_decay=self.weight_decay,
         )
-        pln_loss, pln_batches = 0.0, 0
         pln_loader = (
             loader
             if self.batch_size_pln == self.batch_size
@@ -134,15 +120,10 @@ class FedPLNClient(BaseClient):
                 )
                 loss.backward()
                 pln_optimizer.step()
-                pln_loss += loss.item()
-                pln_batches += 1
         return self.result(
             task,
             model_loss / model_batches,
-            {
-                "pln_state": clone_state(self.pln.state_dict()),
-                "loss_proto": pln_loss / pln_batches,
-            },
+            {"pln_state": clone_state(self.pln.state_dict())},
         )
 
 
@@ -159,8 +140,6 @@ class Server(BaseServer):
             args.feature_dim,
             args.depth_pln,
         )
-        self.prototype_losses: list[float] = []
-        self.prototype_accuracies: list[float] = []
 
     def training_payloads(self):
         return {
@@ -178,43 +157,23 @@ class Server(BaseServer):
         states = [
             results[client_id].payload["pln_state"] for client_id in self.selected
         ]
-        self.pln.load_state_dict(aggregate_pln_states(states, weights))
-        self.prototype_losses.append(
-            sum(results[client_id].payload["loss_proto"] for client_id in self.selected)
-            / len(self.selected)
-        )
+        self.pln.load_state_dict(aggregate_states(states, weights))
 
     @torch.no_grad()
     def evaluate_global(self):
-        """同时计算分类头与 PLN 原型最近邻准确率。"""
+        """评估全局分类模型。"""
         self.model.to(self.device).eval()
-        self.pln.to(self.device).eval()
-        prototypes = self.pln(torch.arange(self.num_classes, device=self.device))
-        correct, prototype_correct, total = 0, 0, 0
+        correct, total = 0, 0
         for inputs, targets in make_loader(self.test_set, self.batch_size):
             inputs = inputs.to(self.device, non_blocking=True)
             features = self.model.extractor(inputs)
             predictions = self.model.classifier(features).argmax(dim=1).cpu()
-            prototype_predictions = (
-                torch.cdist(features, prototypes).argmin(dim=1).cpu()
-            )
             correct += (predictions == targets).sum().item()
-            prototype_correct += (prototype_predictions == targets).sum().item()
             total += len(targets)
-        self.prototype_accuracies.append(100 * prototype_correct / total)
         return 100 * correct / total
 
     def checkpoint_state(self):
         return {
             **super().checkpoint_state(),
             "pln": clone_state(self.pln.state_dict()),
-            "prototype_losses": self.prototype_losses,
-            "prototype_accuracies": self.prototype_accuracies,
-        }
-
-    def progress_fields(self):
-        return {
-            **super().progress_fields(),
-            "loss_pln": f"{self.prototype_losses[-1]:.4f}",
-            "acc_pln": f"{self.prototype_accuracies[-1]:.2f}%",
         }

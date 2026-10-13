@@ -1,6 +1,6 @@
 import torch
 
-from core import BaseClient, BaseServer, clone_state
+from core import BaseClient, BaseServer, aggregate_states, clone_state
 
 
 def add_arguments(parser):
@@ -92,13 +92,12 @@ class Server(BaseServer):
         weights = {client_id: 1.0 / len(self.selected) for client_id in self.selected}
         self.aggregate_weighted(results, weights)
         if self.global_lr != 1.0:
-            blended = clone_state(self.model.state_dict())
-            for name, value in blended.items():
-                if torch.is_floating_point(value):
-                    value.mul_(self.global_lr).add_(
-                        previous[name], alpha=1.0 - self.global_lr
-                    )
-            self.model.load_state_dict(blended)
+            current = clone_state(self.model.state_dict())
+            self.model.load_state_dict(
+                aggregate_states(
+                    [current, previous], [self.global_lr, 1.0 - self.global_lr]
+                )
+            )
         for client_id in self.selected:
             payload = results[client_id].payload
             self.local_controls[client_id] = payload["local_control"]

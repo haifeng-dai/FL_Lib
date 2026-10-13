@@ -1,6 +1,6 @@
 import torch
 
-from core import BaseClient, BaseServer, clone_state
+from core import BaseClient, BaseServer, aggregate_states, clone_state
 
 
 def add_arguments(parser):
@@ -74,13 +74,7 @@ class Server(BaseServer):
 
     def apply_results(self, results):
         self.update_client_states(results)
-        aggregate = clone_state(self.model.state_dict())
-        for name, value in aggregate.items():
-            if torch.is_floating_point(value):
-                value.zero_()
-                for client_id in self.selected:
-                    value.add_(
-                        results[client_id].payload["global_state"][name],
-                        alpha=1.0 / len(self.selected),
-                    )
-        self.model.load_state_dict(aggregate)
+        states = [
+            results[client_id].payload["global_state"] for client_id in self.selected
+        ]
+        self.model.load_state_dict(aggregate_states(states))

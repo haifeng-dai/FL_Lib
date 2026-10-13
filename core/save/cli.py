@@ -186,7 +186,8 @@ def pad_display(value: str, width: int) -> str:
 
 def list_runs(records: list[RunRecord], limit: int | None) -> None:
     """显示运行摘要表。"""
-    shown = records if limit is None else records[:limit]
+    recent = records if limit is None else records[:limit]
+    shown = list(reversed(recent))
     rows = [
         [
             record.run_id,

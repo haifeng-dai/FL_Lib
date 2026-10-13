@@ -2,9 +2,9 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from core import BaseClient, BaseServer, clone_state
+from core.prototypes import extract_prototypes
 
 from ..gfl.fedpln import PLN
-from ..gfl.fedproc import extract_prototypes
 
 
 def add_arguments(parser):

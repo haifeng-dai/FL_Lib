@@ -1,11 +1,7 @@
 import torch
 
 from core import BaseClient, BaseServer
-
-from .fedproc import (
-    aggregate_prototypes,
-    extract_prototypes,
-)
+from core.prototypes import aggregate_prototypes, extract_prototypes
 
 
 def add_arguments(parser):

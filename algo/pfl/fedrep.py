@@ -1,6 +1,4 @@
-from core import BaseClient, BaseServer
-
-from ..pfl.fedper import aggregate_states
+from core import BaseClient, BaseServer, aggregate_states
 
 
 def add_arguments(parser):

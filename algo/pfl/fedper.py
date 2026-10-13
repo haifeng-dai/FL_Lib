@@ -1,19 +1,4 @@
-import torch
-
-from core import BaseClient, BaseServer, clone_state
-
-
-def aggregate_states(states, weights):
-    """按权重聚合一个模块的状态。"""
-    aggregate = clone_state(states[0])
-    for name, tensor in aggregate.items():
-        if torch.is_floating_point(tensor):
-            tensor.zero_()
-            for state, weight in zip(states, weights):
-                tensor.add_(state[name], alpha=weight)
-        else:
-            tensor.copy_(states[0][name])
-    return aggregate
+from core import BaseClient, BaseServer, aggregate_states
 
 
 class FedPerClient(BaseClient):

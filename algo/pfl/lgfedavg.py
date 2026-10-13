@@ -1,6 +1,4 @@
-from core import BaseClient, BaseServer
-
-from ..pfl.fedper import aggregate_states
+from core import BaseClient, BaseServer, aggregate_states
 
 
 class LGFedAvgClient(BaseClient):

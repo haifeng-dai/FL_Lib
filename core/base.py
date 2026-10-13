@@ -22,7 +22,7 @@ from .protocol import (
     EvaluationResult,
     EvaluationTask,
 )
-from .state import clone_state
+from .state import aggregate_states, clone_state
 
 
 class ProgressBar:
@@ -393,23 +393,13 @@ class BaseServer(abc.ABC):
     ) -> None:
         """按样本数或算法提供的权重聚合客户端模型状态。"""
         if weights is None:
-            total = sum(results[client_id].num_samples for client_id in self.selected)
-            weights = {
-                client_id: results[client_id].num_samples / total
-                for client_id in self.selected
-            }
-        aggregate = clone_state(self.model.state_dict())
-        first_client = self.selected[0]
-        for name, tensor in aggregate.items():
-            if torch.is_floating_point(tensor):
-                tensor.zero_()
-                for client_id in self.selected:
-                    tensor.add_(
-                        results[client_id].state[name], alpha=weights[client_id]
-                    )
-            else:
-                tensor.copy_(results[first_client].state[name])
-        self.model.load_state_dict(aggregate)
+            state_weights = [
+                float(results[client_id].num_samples) for client_id in self.selected
+            ]
+        else:
+            state_weights = [weights[client_id] for client_id in self.selected]
+        states = [results[client_id].state for client_id in self.selected]
+        self.model.load_state_dict(aggregate_states(states, state_weights))
 
     @torch.no_grad()
     def evaluate_global(self) -> float:

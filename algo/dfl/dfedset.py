@@ -2,8 +2,7 @@ import torch
 
 from core import BaseClient, BaseServer
 from core.decentralized import adjacency, metropolis_hastings
-
-from ..gfl.fedproc import extract_prototypes
+from core.prototypes import extract_prototypes
 
 
 def add_arguments(parser):

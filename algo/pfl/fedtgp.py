@@ -2,9 +2,9 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from core import BaseClient, BaseServer
+from core.prototypes import aggregate_prototypes, extract_prototypes
 
 from ..gfl.fedpln import dist_contrastive_loss
-from ..gfl.fedproc import aggregate_prototypes, extract_prototypes
 
 
 def add_arguments(parser):
