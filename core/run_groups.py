@@ -33,16 +33,16 @@ def run_groups(
         raise ValueError("GROUP_COMMANDS 必须是非空字符串列表")
 
     common_args = shlex.split(common_args_text)
-    commands = [shlex.split(command_text) for command_text in command_texts]
-    if any(not command for command in commands):
-        raise ValueError("GROUP_COMMANDS 不能包含空命令")
-    for command in commands:
-        algorithm_name([*common_args, *command])
-
-    results: list[tuple[int, str, int]] = []
-    for index, command in enumerate(commands, start=1):
+    commands = []
+    for command_text in command_texts:
+        command = shlex.split(command_text)
+        if not command:
+            raise ValueError("GROUP_COMMANDS 不能包含空命令")
         algorithm_args = [*common_args, *command]
-        algorithm = algorithm_name(algorithm_args)
+        commands.append((algorithm_name(algorithm_args), algorithm_args))
+
+    failures: list[tuple[int, str, int]] = []
+    for index, (algorithm, algorithm_args) in enumerate(commands, start=1):
         print(
             f"\n命令 {index}/{len(commands)}：{shlex.join(algorithm_args)}",
             flush=True,
@@ -54,9 +54,9 @@ def run_groups(
             return_code = 1
         status = "完成" if return_code == 0 else f"失败（退出码 {return_code}）"
         print(f"命令 {index}/{len(commands)} {algorithm} {status}", flush=True)
-        results.append((index, algorithm, return_code))
+        if return_code != 0:
+            failures.append((index, algorithm, return_code))
 
-    failures = [result for result in results if result[2] != 0]
     if failures:
         print("\n失败的命令：", flush=True)
         for index, algorithm, return_code in failures:
@@ -65,5 +65,5 @@ def run_groups(
                 flush=True,
             )
     else:
-        print(f"\n全部 {len(results)} 条命令均已完成。", flush=True)
+        print(f"\n全部 {len(commands)} 条命令均已完成。", flush=True)
     return 1 if failures else 0
