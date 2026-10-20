@@ -1,15 +1,13 @@
 import argparse
 import logging
 import signal
-from datetime import UTC, datetime
 from types import ModuleType
 from typing import Any, Self
 
 import torch
 
 from .config import set_seed
-from .save import configure_logging, create_run, record_running, record_summary
-from .save.artifacts import RunPaths
+from .result import Results
 
 
 def handle_termination(signum, _) -> None:
@@ -23,8 +21,7 @@ class RunSession:
     def __init__(self, args: argparse.Namespace, algorithm: ModuleType) -> None:
         self.args = args
         self.algorithm = algorithm
-        self.started: datetime | None = None
-        self.paths: RunPaths | None = None
+        self.results = Results(args.result_root)
         self.logger: logging.Logger | None = None
         self.server: Any = None
         self._previous_sigterm = None
@@ -32,9 +29,12 @@ class RunSession:
     def __enter__(self) -> Self:
         torch.multiprocessing.set_sharing_strategy("file_system")
         set_seed(self.args.seed)
-        self.started = datetime.now(UTC)
-        self.paths = create_run(
+        algorithm_script = getattr(self.algorithm, "__file__", None)
+        if algorithm_script is None:
+            raise RuntimeError(f"算法模块 {self.algorithm.__name__} 没有关联的脚本文件")
+        self.results.start(
             self.args,
+            algorithm_script=algorithm_script,
             client_metric=(
                 "global_acc"
                 if getattr(self.algorithm.Server, "pfl", False)
@@ -44,49 +44,32 @@ class RunSession:
                 self.algorithm.Server, "extra_metric_columns", ()
             ),
         )
-        record_running(self.paths, self.args, self.started)
-        self.logger = configure_logging(self.paths, self.args.log_level)
-        self.args._startup_log_file = str(self.paths.log_file)
-        self.args._startup_log_lock = torch.multiprocessing.get_context("spawn").Lock()
         self._previous_sigterm = signal.signal(signal.SIGTERM, handle_termination)
+        self.logger = self.results.configure_logging(self.args.log_level)
+        self.args._startup_log_file = str(self.results.startup_log_file)
+        self.args._startup_log_lock = torch.multiprocessing.get_context("spawn").Lock()
         return self
 
     def fit(self, server: Any) -> None:
         """记录服务端实例并启动训练。"""
-        if self.paths is None or self.logger is None:
+        if self.logger is None:
             raise RuntimeError("RunSession 尚未启动")
         self.server = server
-        server.fit(self.paths, self.logger)
+        server.fit(self.results, self.logger)
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         try:
-            if self.paths is not None and self.started is not None:
+            if self.results.run_id is not None:
                 if exc_type is not None and self.logger is not None:
                     self.logger.exception("运行失败")
-                accuracies = (
-                    [] if self.server is None else self.server.accuracies
-                )
                 if exc_type is not None:
                     status = "failed"
                 elif getattr(self.args, "test_mode", False):
                     status = "test"
                 else:
                     status = "completed"
-                record_summary(
-                    self.paths,
-                    self.args,
-                    self.started,
-                    datetime.now(UTC),
-                    status,
-                    max(accuracies, default=0.0),
-                    accuracies[-1] if accuracies else 0.0,
-                )
+                self.results.finish(status)
         finally:
             if self._previous_sigterm is not None:
                 signal.signal(signal.SIGTERM, self._previous_sigterm)
-            if self.logger is not None:
-                for handler in self.logger.handlers[:]:
-                    self.logger.removeHandler(handler)
-                    handler.flush()
-                    handler.close()
         return False

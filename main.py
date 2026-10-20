@@ -8,13 +8,13 @@ import traceback
 
 from algo import load_algorithm
 from core import RunSession, handle_termination
+from core.cli.commands import run_results
 from core.config import (
     add_shared_arguments,
     parse_trials,
     prepare_arguments,
 )
 from core.run_groups import run_groups
-from core.save.cli import run_results
 
 # 共享实验条件和有序算法命令由主进程依次执行。
 GROUP_COMMON_ARGS = (
@@ -63,7 +63,7 @@ def main() -> int:
     """按首个参数分发结果、批处理或算法训练命令。"""
     command = sys.argv[1] if len(sys.argv) > 1 else None
     match command:
-        case "list" | "show" | "compare" | "aggregate":
+        case "list" | "show":
             return run_results()
         case "group":
             previous_sigterm = signal.signal(signal.SIGTERM, handle_termination)

@@ -8,8 +8,7 @@ from typing import Any
 import torch
 from torch.utils.data import ConcatDataset, Subset
 
-from core.save import append_metrics
-from core.save.artifacts import MetricsRow
+from core.result import MetricsRow
 
 from .config import parse_devices, set_seed
 from .data import load_federated_data, make_loader
@@ -261,7 +260,7 @@ class BaseServer(abc.ABC):
         self.client_eval_history: list[dict[str, float]] = []
         self.personalized_client_accuracies: dict[int, float] = {}
 
-    def fit(self, paths, logger) -> None:
+    def fit(self, results, logger) -> None:
         """运行标准通信轮并记录基础指标。"""
         progress = ProgressBar(self.algorithm, self.num_rounds)
         fit_started = perf_counter()
@@ -286,7 +285,7 @@ class BaseServer(abc.ABC):
                         metrics["client_macro_acc"] = self.client_eval_metrics[
                             "client_macro_acc"
                         ]
-                append_metrics(paths, metrics)
+                results.append(metrics)
                 logger.info(
                     "round=%d | loss=%.6f | accuracy=%.4f | elapsed=%.3fs",
                     round_index,
@@ -315,7 +314,7 @@ class BaseServer(abc.ABC):
                     self.progress_fields(),
                 )
                 if round_index % self.check_round == 0:
-                    self.save_checkpoint(paths, round_index)
+                    self.save_checkpoint(results, round_index)
         except BaseException:
             self.pool.close(terminate=True)
             raise
@@ -469,9 +468,10 @@ class BaseServer(abc.ABC):
         self.personalized_client_accuracies = accuracies
         return sum(accuracies.values()) / len(accuracies)
 
-    def save_checkpoint(self, paths, round_index: int) -> None:
+    def save_checkpoint(self, results, round_index: int) -> None:
         """保存所有算法都需要的基础恢复状态。"""
-        torch.save(
+        results.save_checkpoint(
+            round_index,
             {
                 "round": round_index,
                 "model": clone_state(self.model.state_dict()),
@@ -480,7 +480,6 @@ class BaseServer(abc.ABC):
                 "torch_random_state": torch.random.get_rng_state(),
                 "algorithm_state": self.checkpoint_state(),
             },
-            paths.checkpoint_dir / f"round_{round_index}.pt",
         )
 
     def checkpoint_state(self) -> dict[str, Any]:

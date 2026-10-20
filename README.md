@@ -1,6 +1,6 @@
-# FL_MP
+# FL_Lib
 
-FL_MP 是一个基于 PyTorch 多进程的联邦学习实验框架，面向单机多 GPU 训练。项目实现了全局联邦学习、个性化联邦学习、去中心化联邦学习和组合式联邦学习算法，并提供数据划分、实验记录与结果比较工具。
+FL_Lib 是一个基于 PyTorch 的联邦学习算法框架，面向单机多 GPU 训练。项目实现了全局联邦学习、个性化联邦学习和去中心化联邦学习算法，并提供数据划分、实验归档与结果分析工具。
 
 ## 功能概览
 
@@ -8,18 +8,18 @@ FL_MP 是一个基于 PyTorch 多进程的联邦学习实验框架，面向单�
 - 通过统一命令行入口运行算法；算法参数与通用训练参数可组合使用。
 - 使用 PyTorch 多进程调度 GPU worker，可配置每张 GPU 的 worker 数量。
 - 将参数、日志、逐轮指标、checkpoint 和运行摘要保存到结果目录及 SQLite 数据库。
-- 提供多试次运行、批量实验、结果查询、算法比较和试次聚合命令。
+- 提供多试次运行、批量实验和结果查询命令。
 - 提供按算法类别组织的 Jupyter Notebook 结果分析示例。
 
 ## 算法
 
 算法通过 `--algo` 指定，名称对应 `algo/` 下的 Python 文件名。
 
-| 类别 | 算法 |
-| --- | --- |
-| 全局联邦学习（GFL） | FedAvg、FedProx、FedDyn、MOON、SCAFFOLD、FedProc、FedFM、FedPLN、FedLSA |
-| 个性化联邦学习（PFL） | Local、FedPer、FedRep、FedProto、FedTGP、FedSA、FedKD、FedDPC、FedALA、FML、LG-FedAvg |
-| 去中心化联邦学习（DFL） | DisPFL、DFedPGP、DFedSet、DFedAvgM、L2C、ProxyFL、EFHC、PearFL |
+| 类别                    | 算法                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| 全局联邦学习（GFL）     | FedAvg、FedProx、FedDyn、MOON、SCAFFOLD、FedProc、FedFM、FedPLN、FedLSA               |
+| 个性化联邦学习（PFL）   | Local、FedPer、FedRep、FedProto、FedTGP、FedSA、FedKD、FedDPC、FedALA、FML、LG-FedAvg |
+| 去中心化联邦学习（DFL） | DisPFL、DFedPGP、DFedSet、DFedAvgM、L2C、ProxyFL、EFHC、PearFL                        |
 
 具体参数因算法而异，可通过帮助信息查看：
 
@@ -96,7 +96,7 @@ uv run main.py --algo fedavg --seed 42 --times 5
 uv run main.py --algo fedavg --seed 42 --trials 2,4
 ```
 
-### 结果查询与比较
+### 结果查询
 
 ```bash
 # 列出已完成的运行
@@ -107,18 +107,11 @@ uv run main.py list --status all
 
 # 查看单次运行详情
 uv run main.py show <运行ID>
-
-# 比较多个算法
-uv run main.py compare --algo fedavg,fedprox,moon
-
-# 比较同一算法的一项参数取值
-uv run main.py compare --algo fedprox --vary mu
-
-# 聚合多个试次
-uv run main.py aggregate --algo fedavg --trials 1,2,3,4,5
 ```
 
-运行结果默认保存到 `results/`，每次运行包含 `args.json`、`run.log`、`metrics.csv` 和 `checkpoints/`；`results/results.sqlite` 保存运行摘要。通过 `--result-root` 可更改输出目录。测试运行不纳入默认结果比较和聚合，可用 `list --status test` 单独查看。
+运行结果默认保存到 `results/`。每次运行包含算法脚本、`args.json`、`run.log`、`metrics.jsonl` 和 `checkpoints/`；`results/results.sqlite` 保存运行参数、状态和逐轮指标。通过 `--result-root` 可更改输出目录。默认列表显示运行中和已完成的实验；可用 `list --status all` 查看全部状态，或用 `list --status test` 查看测试运行。
+
+跨算法比较、参数比较和多试次曲线分析通过 `notebooks/` 中的 GFL、PFL、DFL 结果分析 notebook 完成。
 
 ## 批量实验与分析
 
