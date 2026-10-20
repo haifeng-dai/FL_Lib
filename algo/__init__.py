@@ -5,11 +5,11 @@ from pathlib import Path
 _ALGORITHM_DIRS = ("gfl", "pfl", "dfl")
 
 
-def load_algorithm():
-    """先读取 --algo，再按算法文件名在分类目录中加载实现。"""
+def load_algorithm(argv: list[str] | None = None):
+    """从参数列表读取 --algo，再按算法文件名加载实现。"""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("-a", "--algo", required=True, help="算法名称，例如 fedavg")
-    known, _ = parser.parse_known_args()
+    known, _ = parser.parse_known_args(argv)
     algorithm_name = known.algo.lower()
     matches = [
         category

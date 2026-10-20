@@ -26,29 +26,19 @@ from core.save import (
 )
 from core.save.cli import run_results
 
-# 直接在这里维护实验计划。各组同时运行，每组内的命令按列表顺序串行执行。
-# common_args 是该组所有算法共享的实验条件，用于公平比较。
-# commands 只填写算法名与该算法的特定参数；两组都会使用此处指定的全部 GPU。
-GROUP_COMMANDS: dict[str, dict[str, str | list[str]]] = {
-    "group_a": {
-        "common_args": "--dataset cifar10 --partition dirichlet --dir 0.1 --service-device 1 --times 5",
-        "commands": [
-            "--algo fedavg",
-            "--algo feddyn",
-            "--algo moon",
-            "--algo scaffold",
-        ],
-    },
-    "group_b": {
-        "common_args": "--dataset cifar10 --partition dirichlet --dir 0.1 --service-device 3 --times 5",
-        "commands": [
-            "--algo fedprox",
-            "--algo fedproc",
-            "--algo fedfm",
-            "--algo fedfm --anchor-loss prototype",
-        ],
-    },
-}
+# 共享实验条件和有序算法命令由主进程依次执行。
+GROUP_COMMON_ARGS = (
+    "--dataset cifar10 --partition dirichlet --dir 0.1 --times 5 --service-device 0"
+)
+GROUP_COMMANDS: list[str] = [
+    "--algo fedavg",
+    "--algo feddyn",
+    "--algo moon",
+    "--algo scaffold",
+    "--algo fedprox",
+    "--algo fedproc",
+    "--algo fedfm",
+]
 
 
 def handle_termination(signum, _) -> None:
@@ -72,42 +62,47 @@ def run_once(algorithm: ModuleType, args: argparse.Namespace) -> None:
     args._startup_log_lock = torch.multiprocessing.get_context("spawn").Lock()
     previous_sigterm = signal.signal(signal.SIGTERM, handle_termination)
     server = None
+    status = "failed"
     try:
         server = algorithm.Server(args)
         server.fit(paths, logger)
-    except (Exception, KeyboardInterrupt, SystemExit):
-        ended = datetime.now(UTC)
-        logger.exception("运行失败")
-        accuracies = [] if server is None else server.accuracies
-        record_summary(
-            paths,
-            args,
-            started,
-            ended,
-            "failed",
-            max(accuracies, default=0.0),
-            accuracies[-1] if accuracies else 0.0,
-        )
-        raise
+        status = "test" if getattr(args, "test_mode", False) else "completed"
     finally:
-        signal.signal(signal.SIGTERM, previous_sigterm)
-    ended = datetime.now(UTC)
-    record_summary(
-        paths,
-        args,
-        started,
-        ended,
-        "test" if getattr(args, "test_mode", False) else "completed",
-        max(server.accuracies),
-        server.accuracies[-1],
-    )
+        ended = datetime.now(UTC)
+        accuracies = [] if server is None else server.accuracies
+        try:
+            if status == "failed":
+                logger.exception("运行失败")
+            record_summary(
+                paths,
+                args,
+                started,
+                ended,
+                status,
+                max(accuracies, default=0.0),
+                accuracies[-1] if accuracies else 0.0,
+            )
+        finally:
+            signal.signal(signal.SIGTERM, previous_sigterm)
+            for handler in logger.handlers[:]:
+                logger.removeHandler(handler)
+                handler.flush()
+                handler.close()
 
 
-def run_algorithm(algorithm: ModuleType) -> int:
+def run_algorithm(argv: list[str] | None = None) -> int:
     """解析参数并按框架级试次独立运行算法。"""
+    argv = sys.argv[1:] if argv is None else argv
+    try:
+        algorithm = load_algorithm(argv)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 1
     parser = argparse.ArgumentParser(description=f"FL_MP {algorithm.__name__}")
     add_shared_arguments(parser, algorithm)
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 1
     expected_name = algorithm.__name__.rsplit(".", maxsplit=1)[-1]
     if args.algo.lower() != expected_name:
         raise ValueError(f"算法模块 {expected_name} 与 --algo={args.algo} 不一致")
@@ -137,11 +132,16 @@ def main() -> int:
         case "group":
             previous_sigterm = signal.signal(signal.SIGTERM, handle_termination)
             try:
-                return run_groups(GROUP_COMMANDS, sys.argv[2:])
+                return run_groups(
+                    GROUP_COMMON_ARGS,
+                    GROUP_COMMANDS,
+                    sys.argv[2:],
+                    run_command=run_algorithm,
+                )
             finally:
                 signal.signal(signal.SIGTERM, previous_sigterm)
         case _:
-            return run_algorithm(load_algorithm())
+            return run_algorithm(sys.argv[1:])
 
 
 if __name__ == "__main__":
