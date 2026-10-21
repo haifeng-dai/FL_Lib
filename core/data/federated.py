@@ -45,7 +45,6 @@ class TensorImageDataset(Dataset):
 
 def load_federated_data(
     name: str,
-    data_root: str,
     test_ratio: float,
     partition: str,
     num_clients: int,
@@ -55,7 +54,7 @@ def load_federated_data(
 ) -> tuple[dict[int, TensorSubset], dict[int, TensorSubset], int]:
     """下载数据，并按同一客户端计划组装训练与测试 ``Subset``。"""
     dataset_cls, num_classes = DATASETS[name]
-    root = Path(data_root) / name
+    root = Path("datasets") / name
     raw_train = dataset_cls(root=root, train=True, download=True)
     raw_test = dataset_cls(root=root, train=False, download=True)
     train = TensorImageDataset(raw_train.data, raw_train.targets)

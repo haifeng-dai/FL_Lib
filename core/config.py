@@ -59,11 +59,7 @@ def add_shared_arguments(
         default=None,
         help="病态划分时每个客户端持有的不同类别数",
     )
-    parser.add_argument("--feature-dim", type=int, default=512)
-    parser.add_argument("--pre-train", default=None)
     parser.add_argument("--check-round", type=int, default=50)
-    parser.add_argument("--data-root", default="datasets")
-    parser.add_argument("--result-root", default="results")
     parser.add_argument(
         "--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO"
     )

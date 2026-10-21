@@ -19,7 +19,6 @@ class FedProcClient(BaseClient):
 
     def __init__(self, args, device, num_classes):
         super().__init__(args, device, num_classes)
-        self.feature_dim: int = args.feature_dim
 
     def train(self, task):
         prototypes = task.payload["global_prototypes"].to(self.device)
@@ -45,7 +44,7 @@ class FedProcClient(BaseClient):
             self.model,
             self.train_loader(task.client_id),
             self.num_classes,
-            self.feature_dim,
+            self.model.feature_dim,
             self.device,
         )
         return self.result(
@@ -62,8 +61,7 @@ class Server(BaseServer):
 
     def __init__(self, args) -> None:
         super().__init__(args)
-        self.feature_dim: int = args.feature_dim
-        self.global_prototypes = torch.zeros(self.num_classes, self.feature_dim)
+        self.global_prototypes = torch.zeros(self.num_classes, self.model.feature_dim)
         self.alpha = 1.0
 
     def training_payloads(self):

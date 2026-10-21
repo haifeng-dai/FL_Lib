@@ -60,7 +60,7 @@ class FedTGPClient(BaseClient):
             self.model,
             self.train_loader(task.client_id),
             self.num_classes,
-            self.feature_dim,
+            self.model.feature_dim,
             self.device,
         )
         return self.result(
@@ -76,12 +76,11 @@ class Server(BaseServer):
 
     def __init__(self, args):
         super().__init__(args)
-        self.tgp = TGP(self.num_classes, args.feature_dim).to(self.device)
+        self.tgp = TGP(self.num_classes, self.model.feature_dim).to(self.device)
         self.prototypes = None
         self.num_epoch_g: int = args.num_epoch_g
         self.lr_g: float = args.lr_g
         self.margin_threshold: float = args.margin_threshold
-        self.feature_dim: int = args.feature_dim
         self.gap = torch.full((self.num_classes,), float("inf"), device=self.device)
         self.prototype_loss = 0.0
 
@@ -96,7 +95,7 @@ class Server(BaseServer):
         old = (
             self.prototypes
             if self.prototypes is not None
-            else torch.zeros(self.num_classes, self.feature_dim)
+            else torch.zeros(self.num_classes, self.model.feature_dim)
         )
         targets = aggregate_prototypes(payloads, old)
         distances = torch.cdist(targets.to(self.device), targets.to(self.device))

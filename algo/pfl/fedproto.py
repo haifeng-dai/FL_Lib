@@ -40,7 +40,7 @@ class FedProtoClient(BaseClient):
             self.model,
             self.train_loader(task.client_id),
             self.num_classes,
-            self.feature_dim,
+            self.model.feature_dim,
             self.device,
         )
         return self.result(
@@ -57,7 +57,6 @@ class Server(BaseServer):
         self.global_prototypes = None
         self.prototype_available = torch.zeros(self.num_classes, dtype=torch.bool)
         self.mu: float = args.mu
-        self.feature_dim: int = args.feature_dim
 
     def training_payloads(self):
         return {
@@ -74,7 +73,7 @@ class Server(BaseServer):
             [results[client_id].payload for client_id in self.selected],
             self.global_prototypes
             if self.global_prototypes is not None
-            else torch.zeros(self.num_classes, self.feature_dim),
+            else torch.zeros(self.num_classes, self.model.feature_dim),
             by_count=True,
         )
         received_counts = torch.stack(

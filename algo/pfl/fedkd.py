@@ -71,7 +71,7 @@ class FedKDClient(BaseClient):
             k: value.to(self.device) for k, value in self.mentees[client_id].items()
         }
         global_model = self.copy_model(global_state).requires_grad_(True).train()
-        align = torch.nn.Linear(self.feature_dim, self.feature_dim, bias=False).to(
+        align = torch.nn.Linear(self.model.feature_dim, self.model.feature_dim, bias=False).to(
             self.device
         )
         if task.payload["align"] is not None:

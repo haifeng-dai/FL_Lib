@@ -21,7 +21,7 @@ class RunSession:
     def __init__(self, args: argparse.Namespace, algorithm: ModuleType) -> None:
         self.args = args
         self.algorithm = algorithm
-        self.results = Results(args.result_root)
+        self.results = Results()
         self.logger: logging.Logger | None = None
         self.server: Any = None
         self._previous_sigterm = None

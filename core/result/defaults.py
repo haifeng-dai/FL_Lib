@@ -13,8 +13,6 @@ _COMMON = {
     "join_ratio": 1.0,
     "seed": 42,
     "test_ratio": 0.2,
-    "feature_dim": 512,
-    "pre_train": None,
 }
 
 DEFAULT_QUERY_ARGS = {

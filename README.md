@@ -80,7 +80,7 @@ uv run main.py --algo fedavg --partition dirichlet --dir 0.1
 uv run main.py --algo fedavg --partition pathological --classes-per-client 2
 ```
 
-数据集会在首次运行时下载到 `datasets/`。可通过 `--data-root` 更改数据目录。
+数据集会在首次运行时下载到当前工作目录下的 `datasets/`。
 
 ### 多次试验
 
@@ -109,7 +109,7 @@ uv run main.py list --status all
 uv run main.py show <运行ID>
 ```
 
-运行结果默认保存到 `results/`。每次运行包含算法脚本、`args.json`、`run.log`、`metrics.jsonl` 和 `checkpoints/`；`results/results.sqlite` 保存运行参数、状态和逐轮指标。通过 `--result-root` 可更改输出目录。默认列表显示运行中和已完成的实验；可用 `list --status all` 查看全部状态，或用 `list --status test` 查看测试运行。
+运行结果固定保存到当前工作目录下的 `results/`。每次运行包含算法脚本、`args.json`、`run.log`、`metrics.jsonl` 和 `checkpoints/`；`results/results.sqlite` 保存运行参数、状态和逐轮指标。默认列表显示运行中和已完成的实验；可用 `list --status all` 查看全部状态，或用 `list --status test` 查看测试运行。
 
 跨算法比较、参数比较和多试次曲线分析通过 `notebooks/` 中的 GFL、PFL、DFL 结果分析 notebook 完成。
 

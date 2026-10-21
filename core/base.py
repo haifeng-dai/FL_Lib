@@ -81,7 +81,6 @@ class BaseClient(ClientHook):
         self.num_classes = num_classes
         self.model_name: str = args.model
         self.dataset_name: str = args.dataset
-        self.feature_dim: int = args.feature_dim
         self.batch_size: int = args.batch_size
         self.num_epochs: int = args.num_epochs
         self.lr: float = args.lr
@@ -92,7 +91,6 @@ class BaseClient(ClientHook):
             self.model_name,
             self.dataset_name,
             self.num_classes,
-            self.feature_dim,
         )
         self.ce_loss = torch.nn.CrossEntropyLoss()
 
@@ -145,7 +143,6 @@ class BaseClient(ClientHook):
             self.model_name,
             self.dataset_name,
             self.num_classes,
-            self.feature_dim,
         )
         model.load_state_dict(state)
         model.to(self.device)
@@ -221,7 +218,6 @@ class BaseServer(abc.ABC):
         startup_trace(args, "load_federated_data_begin")
         self.train_sets, self.test_sets, self.num_classes = load_federated_data(
             args.dataset,
-            args.data_root,
             args.test_ratio,
             args.partition,
             args.num_clients,
@@ -235,8 +231,6 @@ class BaseServer(abc.ABC):
             args.model,
             args.dataset,
             self.num_classes,
-            args.feature_dim,
-            args.pre_train,
         )
         self.pool = PersistentClientPool(
             parse_devices(args.devices),

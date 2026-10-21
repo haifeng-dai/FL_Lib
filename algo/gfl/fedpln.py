@@ -64,7 +64,7 @@ class FedPLNClient(BaseClient):
         self.pln = PLN(
             num_classes,
             args.width_pln,
-            self.feature_dim,
+            self.model.feature_dim,
             args.depth_pln,
         ).to(self.device)
         self.all_classes = torch.arange(num_classes, device=self.device)
@@ -137,7 +137,7 @@ class Server(BaseServer):
         self.pln = PLN(
             self.num_classes,
             args.width_pln,
-            args.feature_dim,
+            self.model.feature_dim,
             args.depth_pln,
         )
 

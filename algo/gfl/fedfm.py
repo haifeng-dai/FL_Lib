@@ -40,7 +40,6 @@ class FedFMClient(BaseClient):
     def __init__(self, args, device, num_classes):
         super().__init__(args, device, num_classes)
         self.mu: float = args.mu
-        self.feature_dim: int = args.feature_dim
         self.anchor_loss: str = args.anchor_loss
         self.cg_tau: float = args.cg_tau
 
@@ -50,7 +49,7 @@ class FedFMClient(BaseClient):
                 self.model,
                 self.train_loader(task.client_id),
                 self.num_classes,
-                self.feature_dim,
+                self.model.feature_dim,
                 self.device,
             )
             return self.result(task, 0.0, {"prototypes": anchors, "counts": counts})
@@ -102,7 +101,7 @@ class Server(BaseServer):
 
     def __init__(self, args):
         super().__init__(args)
-        self.global_anchors = torch.zeros(self.num_classes, args.feature_dim)
+        self.global_anchors = torch.zeros(self.num_classes, self.model.feature_dim)
         self.phase = "train"
         self.start_fm_round: int = args.start_fm_round
 

@@ -58,7 +58,7 @@ class FedSAClient(BaseClient):
             self.model,
             self.train_loader(task.client_id),
             self.num_classes,
-            self.feature_dim,
+            self.model.feature_dim,
             self.device,
         )
         return self.result(
@@ -74,7 +74,7 @@ class Server(BaseServer):
         super().__init__(args)
         self.alpha: float = args.alpha_sa
         self.anchors = torch.nn.functional.normalize(
-            torch.randn(self.num_classes, args.feature_dim), dim=1
+            torch.randn(self.num_classes, self.model.feature_dim), dim=1
         )
         self.client_anchors = {i: self.anchors.clone() for i in range(self.num_clients)}
 

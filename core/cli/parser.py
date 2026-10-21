@@ -1,8 +1,6 @@
 import argparse
 from collections.abc import Sequence
 
-DEFAULT_DATABASE = "results/results.sqlite"
-
 
 def _csv_values(value: str) -> tuple[str, ...]:
     return tuple(

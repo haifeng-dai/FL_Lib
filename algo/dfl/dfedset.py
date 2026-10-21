@@ -60,7 +60,7 @@ class DFedSETClient(BaseClient):
             self.model,
             self.train_loader(task.client_id),
             self.num_classes,
-            self.feature_dim,
+            self.model.feature_dim,
             self.device,
         )
         if self.confidence_mode == "count":
@@ -88,7 +88,7 @@ class Server(BaseServer):
         self.relay = not args.no_relay
         self.redirect = not args.no_redirect
         self.weights = metropolis_hastings(adjacency(args)).to(self.device)
-        self.sums = torch.zeros(self.num_clients, self.num_classes, args.feature_dim)
+        self.sums = torch.zeros(self.num_clients, self.num_classes, self.model.feature_dim)
         self.confidences = torch.zeros(self.num_clients, self.num_classes, 1)
         self.counts = torch.zeros(self.num_clients, self.num_classes)
         self.consensus = torch.zeros_like(self.sums)

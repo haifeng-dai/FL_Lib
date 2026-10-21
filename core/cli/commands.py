@@ -6,12 +6,12 @@ from typing import Any
 from core.result import ResultsReader, RunQuery
 
 from .display import display_width, print_table, render_accuracy_chart
-from .parser import DEFAULT_DATABASE, parse_args
+from .parser import parse_args
 
 
 def run_results(argv=None) -> int:
     args = parse_args(argv)
-    reader = ResultsReader("results", database=DEFAULT_DATABASE)
+    reader = ResultsReader()
     try:
         if args.command == "show":
             _show_run(reader, args.run_id)

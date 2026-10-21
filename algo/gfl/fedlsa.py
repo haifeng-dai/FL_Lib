@@ -41,6 +41,10 @@ class FedLSAModel(torch.nn.Module):
         self.backbone = base_model.extractor
         self.head = base_model.classifier
 
+    @property
+    def feature_dim(self):
+        return self.head.in_features
+
     def extractor(self, inputs):
         return torch.nn.functional.normalize(self.backbone(inputs), dim=1)
 
@@ -114,9 +118,9 @@ class Server(BaseServer):
         self.lr_g: float = args.lr_g
         self.tau: float = args.tau
         self.random_vectors = torch.randn(
-            self.num_classes, args.feature_dim, device=self.device, requires_grad=True
+            self.num_classes, self.model.feature_dim, device=self.device, requires_grad=True
         )
-        self.anchor_mapping = AnchorMapping(args.feature_dim).to(self.device)
+        self.anchor_mapping = AnchorMapping(self.model.feature_dim).to(self.device)
         self.labels = torch.arange(self.num_classes, device=self.device)
         self.last_server_loss = 0.0
 

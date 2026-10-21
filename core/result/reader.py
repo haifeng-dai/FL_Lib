@@ -8,14 +8,9 @@ from .database import DatabaseReader, RunQuery, RunSummary
 class ResultsReader:
     """统一读取运行记录和数据库中的逐轮指标。"""
 
-    def __init__(
-        self,
-        result_root: str | Path,
-        *,
-        database: str | Path | None = None,
-    ):
-        self.root = Path(result_root)
-        self.database = DatabaseReader(database or self.root / "results.sqlite")
+    def __init__(self):
+        self.root = Path("results")
+        self.database = DatabaseReader(self.root / "results.sqlite")
 
     def query_runs(self, query: RunQuery | None = None) -> list[RunSummary]:
         return self.database.query_runs(query)

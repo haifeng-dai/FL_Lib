@@ -20,8 +20,8 @@ DB_RETRY_DELAYS = (0.2, 0.5, 1.0)
 class Results:
     """管理单次运行的指标归档和总结果库记录。"""
 
-    def __init__(self, result_root: str | Path):
-        self.root = Path(result_root)
+    def __init__(self):
+        self.root = Path("results")
         self.database = self.root / "results.sqlite"
         self.run_id: str | None = None
         self._args: dict[str, Any] | None = None

@@ -41,7 +41,7 @@ class PearFLClient(BaseClient):
             self.model,
             self.train_loader(task.client_id),
             self.num_classes,
-            self.feature_dim,
+            self.model.feature_dim,
             self.device,
         )
         return self.result(
@@ -58,7 +58,7 @@ class Server(BaseServer):
         self.num_epochs = args.num_epochs
         self.weights = sinkhorn(adjacency(args)).to(self.device)
         shape = (self.num_clients, self.num_classes)
-        self.local_prototypes = torch.zeros(*shape, args.feature_dim)
+        self.local_prototypes = torch.zeros(*shape, self.model.feature_dim)
         self.local_counts = torch.zeros(*shape)
         self.personalized_prototypes = torch.zeros_like(self.local_prototypes)
         self.personalized_prototype_available = torch.zeros(*shape, dtype=torch.bool)

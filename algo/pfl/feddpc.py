@@ -80,7 +80,7 @@ class FedDPCClient(BaseClient):
                     proto_sum += loss_proto.item()
                     body_batches += 1
         local, _ = extract_prototypes(
-            self.model, loader, self.num_classes, self.feature_dim, self.device
+            self.model, loader, self.num_classes, self.model.feature_dim, self.device
         )
         return self.result(
             task,
@@ -98,7 +98,7 @@ class Server(BaseServer):
 
     def __init__(self, args):
         super().__init__(args)
-        self.pln = PLN(self.num_classes, args.feature_dim, args.feature_dim, 1).to(
+        self.pln = PLN(self.num_classes, self.model.feature_dim, self.model.feature_dim, 1).to(
             self.device
         )
         self.prototypes = None
